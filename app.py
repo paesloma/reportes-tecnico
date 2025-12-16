@@ -1,9 +1,8 @@
 import streamlit as st
-import tempfile
-import os
 from datetime import date
 from io import BytesIO
-from PIL import Image as PilImage # Importamos Pillow con alias para evitar conflictos
+from PIL import Image as PilImage # Importamos Pillow con alias
+import os
 
 # Importaciones de ReportLab
 from reportlab.lib.pagesizes import letter
@@ -13,9 +12,9 @@ from reportlab.lib.units import inch
 from reportlab.lib import colors
 
 # --- Configuración de la página ---
-st.set_page_config(page_title="Generador de Reportes Técnicos", layout="centered")
+st.set_page_config(page_title="🛠️ Generador de Reportes Técnicos", layout="centered")
 
-def generar_pdf(datos, imagenes):
+def generar_pdf(datos, imagenes_cargadas):
     # Usaremos BytesIO para escribir el PDF directamente en la memoria
     buffer = BytesIO()
     doc = SimpleDocTemplate(buffer, pagesize=letter,
@@ -76,38 +75,39 @@ def generar_pdf(datos, imagenes):
     story.append(Paragraph(f"<b>COSTO TOTAL DEL SERVICIO: ${datos['costo']:.2f}</b>", estilo_costo))
 
     # --- 4. Evidencia Fotográfica ---
-    if any(imagenes.values()):
+    if imagenes_cargadas: # Verificamos si hay imágenes en la lista
         story.append(Paragraph("4. Evidencia Fotográfica", estilo_seccion))
         story.append(Spacer(1, 0.1 * inch))
-
-        for descripcion, archivo_img in imagenes.items():
-            if archivo_img is not None:
-                story.append(Paragraph(f"<b>{descripcion}:</b>", estilo_campo_bold))
+        
+        # Iteramos sobre CADA imagen cargada
+        for i, archivo_img in enumerate(imagenes_cargadas):
+            descripcion = f"Imagen {i + 1} ({archivo_img.name})"
+            story.append(Paragraph(f"<b>{descripcion}:</b>", estilo_campo_bold))
+            
+            try:
+                archivo_img.seek(0)
                 
-                try:
-                    archivo_img.seek(0)
-                    
-                    # CARGA CRÍTICA: Usamos Pillow para convertir la imagen a un formato de bytes estable (JPEG)
-                    img_pillow = PilImage.open(archivo_img)
-                    
-                    # Usamos BytesIO para guardar la imagen convertida en memoria
-                    img_buffer = BytesIO()
-                    
-                    # Forzamos JPEG (máxima compatibilidad)
-                    if img_pillow.mode in ('RGBA', 'P'):
-                        img_pillow = img_pillow.convert('RGB')
+                # CARGA CRÍTICA: Usamos Pillow para convertir la imagen a un buffer de bytes estable (JPEG)
+                img_pillow = PilImage.open(archivo_img)
+                
+                img_buffer = BytesIO()
+                
+                # Forzamos JPEG (máxima compatibilidad)
+                if img_pillow.mode in ('RGBA', 'P'):
+                    img_pillow = img_pillow.convert('RGB')
                         
-                    img_pillow.save(img_buffer, format='JPEG')
-                    img_buffer.seek(0)
+                img_pillow.save(img_buffer, format='JPEG')
+                img_buffer.seek(0)
+                
+                # ReportLab lee el buffer de bytes
+                # Usamos una imagen con un ancho limitado para que quepan en la página
+                img = Image(img_buffer, width=3.0 * inch, height=3.0 * inch) 
+                story.append(img)
+                story.append(Spacer(1, 0.2 * inch))
                     
-                    # ReportLab puede leer directamente el buffer de bytes si se lo pasamos con el tipo correcto
-                    img = Image(img_buffer, width=3.0 * inch, height=3.0 * inch)
-                    story.append(img)
-                    story.append(Spacer(1, 0.2 * inch))
-                    
-                except Exception as e:
-                    story.append(Paragraph(f"(Error al cargar imagen. Tipo de fallo: {type(e).__name__})", estilo_campo_valor))
-                    st.warning(f"Advertencia: No se pudo incluir la imagen '{descripcion}'. Fallo al procesar la imagen.")
+            except Exception as e:
+                story.append(Paragraph(f"(Error al cargar imagen. Tipo de fallo: {type(e).__name__})", estilo_campo_valor))
+                st.warning(f"Advertencia: No se pudo incluir la imagen '{descripcion}'. Fallo al procesar la imagen.")
                 
     # --- 5. Firmas ---
     story.append(Spacer(1, 0.5 * inch))
@@ -154,12 +154,15 @@ with st.form("formulario_reporte"):
     solucion = st.text_area("Diagnóstico y Solución Aplicada", key="solucion")
     costo = st.number_input("Costo Total ($)", min_value=0.0, key="costo")
     
-    st.markdown("### 📸 Evidencia Fotográfica (Opcional)")
-    col_img1, col_img2 = st.columns(2)
-    with col_img1:
-        img_antes = st.file_uploader("Foto del Estado Inicial (Antes)", type=['jpg', 'png', 'jpeg'], key="img_antes")
-    with col_img2:
-        img_despues = st.file_uploader("Foto del Resultado (Después)", type=['jpg', 'png', 'jpeg'], key="img_despues")
+    st.markdown("### 📸 Evidencia Fotográfica (Carga Múltiple)")
+    
+    # CAMBIO CLAVE: Carga de múltiples archivos
+    imagenes_cargadas = st.file_uploader(
+        "Cargar Fotos (JPEG, PNG)", 
+        type=['jpg', 'png', 'jpeg'],
+        accept_multiple_files=True,  # ESTO PERMITE LA CARGA MÚLTIPLE
+        key="imgs_multiples"
+    )
 
     submitted = st.form_submit_button("✅ Generar Reporte PDF")
 
@@ -178,15 +181,11 @@ if submitted:
             "costo": costo
         }
         
-        imgs_para_pdf = {
-            "Estado Inicial (Antes)": img_antes,
-            "Resultado Final (Después)": img_despues
-        }
-
-        with st.spinner('Generando PDF con ReportLab (Versión Estabilizada)...'):
+        # Pasamos la lista de archivos al generador
+        with st.spinner('Generando PDF con ReportLab (Versión Múltiple)...'):
             try:
-                pdf_bytes = generar_pdf(datos_formulario, imgs_para_pdf)
-                st.success("¡Reporte generado con éxito! Esta versión es la más estable para imágenes.")
+                pdf_bytes = generar_pdf(datos_formulario, imagenes_cargadas)
+                st.success(f"¡Reporte generado con éxito! Se procesaron {len(imagenes_cargadas) if imagenes_cargadas else 0} imágenes.")
                 
                 nombre_archivo = f"Reporte_{cliente.replace(' ', '_')}_{date.today()}.pdf"
                 st.download_button(
@@ -196,5 +195,4 @@ if submitted:
                     mime="application/pdf"
                 )
             except Exception as e:
-                # Si falla aquí, el problema es en el ambiente base de Streamlit o la versión de Python.
-                st.error(f"Error CRÍTICO final al generar el PDF. Detalle: {type(e).__name__}. Por favor, verifique el 'requirements.txt' y la versión de Python en su despliegue.")
+                st.error(f"Error CRÍTICO final al generar el PDF. Detalle: {type(e).__name__}. Verifique el 'requirements.txt' y la estabilidad del entorno.")
