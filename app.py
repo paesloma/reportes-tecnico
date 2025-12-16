@@ -1,6 +1,8 @@
 import streamlit as st
 from fpdf import FPDF
+from fpdf import FPDF
 from fpdf.fonts import find_font_path, FreeSerifFont # Importación necesaria para la fuente
+import tempfile
 import tempfile
 import os
 from datetime import date
@@ -215,3 +217,4 @@ if submitted:
                 )
             except Exception as e:
                 st.error(f"Error CRÍTICO al generar el PDF. Detalle: {type(e).__name__}. Esto suele indicar un problema con caracteres no soportados o fallo de la librería FPDF.")
+
