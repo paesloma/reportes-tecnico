@@ -1,7 +1,5 @@
 import streamlit as st
 from fpdf import FPDF
-# Importación simplificada de la fuente para evitar el ImportError en Streamlit Cloud
-from fpdf.fonts import find_font_path 
 import tempfile
 import os
 from datetime import date
@@ -10,29 +8,14 @@ from io import BytesIO
 # --- Configuración de la página ---
 st.set_page_config(page_title="Generador de Reportes Técnicos", layout="centered")
 
-# --- Configuración de la Fuente UTF-8 (para soportar acentos y caracteres especiales) ---
-try:
-    # Intenta encontrar la fuente FreeSerif (si fonttools está instalado)
-    font_path = find_font_path("FreeSerif")
-except FileNotFoundError:
-    font_path = None
-    
+# --- Lógica del PDF ---
+# Volvemos a Arial/Helvetica, que es la fuente más estable en entornos de nube,
+# manejando la codificación manualmente en los campos largos.
+
 class PDF(FPDF):
     def __init__(self, orientation='P', unit='mm', format='A4'):
         super().__init__(orientation, unit, format)
-        if font_path:
-            # Añadir la fuente FreeSerif y su versión Bold
-            self.add_font("FreeSerif", style="", fname=font_path)
-            # Nota: Esto asume que el archivo Bold existe, si no, puede fallar. Usamos try/except en el código si fuera necesario, pero simplificamos aquí.
-            try:
-                self.add_font("FreeSerif", style="B", fname=font_path.replace('.ttf', 'Bold.ttf'))
-            except Exception:
-                # Usar la fuente regular si la bold falla (solución robusta)
-                self.add_font("FreeSerif", style="B", fname=font_path) 
-            self.font_family = "FreeSerif"
-        else:
-            # Fallback a Arial (no soporta UTF-8 completo, pero evita el crash)
-            self.font_family = "Arial" 
+        self.font_family = "Helvetica" # Usamos Helvetica, que es idéntica a Arial pero a veces más estable.
 
     def header(self):
         if os.path.exists("logo.png"):
@@ -64,7 +47,8 @@ def generar_pdf(datos, imagenes):
     pdf.set_font(pdf.font_family, 'B', 12)
     pdf.cell(40, 10, "Cliente:", 0, 0)
     pdf.set_font(pdf.font_family, '', 12)
-    pdf.cell(0, 10, datos['cliente'], 0, 1)
+    # Codificamos a latin-1 para acentos/ñ en campos cortos (más estables)
+    pdf.cell(0, 10, datos['cliente'].encode('latin-1', 'replace').decode('latin-1'), 0, 1)
     
     pdf.set_font(pdf.font_family, 'B', 12)
     pdf.cell(40, 10, "Fecha:", 0, 0)
@@ -74,12 +58,12 @@ def generar_pdf(datos, imagenes):
     pdf.set_font(pdf.font_family, 'B', 12)
     pdf.cell(40, 10, "Dispositivo:", 0, 0)
     pdf.set_font(pdf.font_family, '', 12)
-    pdf.cell(0, 10, datos['equipo'], 0, 1)
+    pdf.cell(0, 10, datos['equipo'].encode('latin-1', 'replace').decode('latin-1'), 0, 1)
 
     pdf.set_font(pdf.font_family, 'B', 12)
     pdf.cell(40, 10, "Técnico:", 0, 0)
     pdf.set_font(pdf.font_family, '', 12)
-    pdf.cell(0, 10, datos['tecnico'], 0, 1)
+    pdf.cell(0, 10, datos['tecnico'].encode('latin-1', 'replace').decode('latin-1'), 0, 1)
     pdf.ln(5)
 
     # 2. Detalles Técnicos
@@ -90,14 +74,18 @@ def generar_pdf(datos, imagenes):
     pdf.set_font(pdf.font_family, 'B', 12)
     pdf.multi_cell(0, 5, "Falla Reportada:")
     pdf.set_font(pdf.font_family, '', 12)
-    pdf.multi_cell(0, 5, datos['falla'])
+    # Codificación de campos largos para evitar FPDFException
+    falla_codificada = datos['falla'].encode('latin-1', 'replace').decode('latin-1')
+    pdf.multi_cell(0, 5, falla_codificada)
     pdf.ln(3)
 
     # Trabajo Realizado
     pdf.set_font(pdf.font_family, 'B', 12)
     pdf.multi_cell(0, 5, "Trabajo Realizado:")
     pdf.set_font(pdf.font_family, '', 12)
-    pdf.multi_cell(0, 5, datos['solucion'])
+    # Codificación de campos largos para evitar FPDFException
+    solucion_codificada = datos['solucion'].encode('latin-1', 'replace').decode('latin-1')
+    pdf.multi_cell(0, 5, solucion_codificada)
     pdf.ln(5)
 
     # 3. Costo Total
@@ -115,7 +103,7 @@ def generar_pdf(datos, imagenes):
             temp_path = None
             if archivo_img is not None:
                 pdf.set_font(pdf.font_family, 'B', 12)
-                pdf.cell(0, 10, descripcion, 0, 1)
+                pdf.cell(0, 10, descripcion.encode('latin-1', 'replace').decode('latin-1'), 0, 1)
                 
                 try:
                     archivo_img.seek(0)
@@ -212,5 +200,5 @@ if submitted:
                     mime="application/pdf"
                 )
             except Exception as e:
-                # Si falla incluso con FreeSerif, el problema es en el ambiente de ejecución
-                st.error(f"Error CRÍTICO al generar el PDF. Detalle: {type(e).__name__}. Por favor, verifique que su 'requirements.txt' esté correctamente guardado en GitHub con las 3 librerías: streamlit, fpdf2, fonttools.")
+                # Este error CRÍTICO es la última línea de defensa.
+                st.error(f"Error CRÍTICO al generar el PDF. Detalle: {type(e).__name__}. Si ve este error, probablemente el problema sea con caracteres especiales o el entorno de la nube. Intente no usar emojis o símbolos especiales.")
