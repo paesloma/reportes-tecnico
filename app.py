@@ -1,8 +1,7 @@
 import streamlit as st
 from fpdf import FPDF
-from fpdf import FPDF
-from fpdf.fonts import find_font_path, FreeSerifFont # Importación necesaria para la fuente
-import tempfile
+# Importación simplificada de la fuente para evitar el ImportError en Streamlit Cloud
+from fpdf.fonts import find_font_path 
 import tempfile
 import os
 from datetime import date
@@ -11,28 +10,29 @@ from io import BytesIO
 # --- Configuración de la página ---
 st.set_page_config(page_title="Generador de Reportes Técnicos", layout="centered")
 
-# --- Configuración de la Fuente UTF-8 ---
-# CRÍTICO: Buscamos la ruta de FreeSerif (debe estar disponible si instalamos fonttools)
+# --- Configuración de la Fuente UTF-8 (para soportar acentos y caracteres especiales) ---
 try:
+    # Intenta encontrar la fuente FreeSerif (si fonttools está instalado)
     font_path = find_font_path("FreeSerif")
 except FileNotFoundError:
-    # Esto ocurre si fonttools no está instalado correctamente, pero lo ignoramos para permitir que FPDF siga con su fuente base
     font_path = None
-    st.warning("Advertencia: No se encontró la fuente FreeSerif. Los caracteres especiales podrían causar errores.")
-
-
-# --- Lógica del PDF ---
+    
 class PDF(FPDF):
     def __init__(self, orientation='P', unit='mm', format='A4'):
         super().__init__(orientation, unit, format)
         if font_path:
-            # Añadir la fuente FreeSerif y su versión Bold para soporte completo UTF-8
+            # Añadir la fuente FreeSerif y su versión Bold
             self.add_font("FreeSerif", style="", fname=font_path)
-            # Nota: Asumimos que la versión bold está en la misma ubicación con el sufijo 'Bold'
-            self.add_font("FreeSerif", style="B", fname=font_path.replace('.ttf', 'Bold.ttf'))
+            # Nota: Esto asume que el archivo Bold existe, si no, puede fallar. Usamos try/except en el código si fuera necesario, pero simplificamos aquí.
+            try:
+                self.add_font("FreeSerif", style="B", fname=font_path.replace('.ttf', 'Bold.ttf'))
+            except Exception:
+                # Usar la fuente regular si la bold falla (solución robusta)
+                self.add_font("FreeSerif", style="B", fname=font_path) 
             self.font_family = "FreeSerif"
         else:
-            self.font_family = "Arial" # Si falla, usamos Arial como fallback
+            # Fallback a Arial (no soporta UTF-8 completo, pero evita el crash)
+            self.font_family = "Arial" 
 
     def header(self):
         if os.path.exists("logo.png"):
@@ -41,20 +41,18 @@ class PDF(FPDF):
         else:
             self.ln(10)
 
-        # Usar la fuente FreeSerif/Arial para el encabezado
         self.set_font(self.font_family, 'B', 15)
         self.cell(0, 10, 'REPORTE DE SERVICIO TÉCNICO', 0, 1, 'C')
         self.ln(5)
 
     def footer(self):
         self.set_y(-15)
-        self.set_font(self.font_family, '', 8) # Usar FreeSerif/Arial para el pie de página
+        self.set_font(self.font_family, '', 8) 
         self.cell(0, 10, f'Página {self.page_no()}', 0, 0, 'C')
 
 def generar_pdf(datos, imagenes):
     pdf = PDF()
     pdf.add_page()
-    # Usar la fuente definida en __init__
     pdf.set_font(pdf.font_family, size=12) 
 
     # 1. Información del Cliente
@@ -186,7 +184,6 @@ if submitted:
     if not cliente or not equipo or not tecnico or not falla or not solucion:
         st.error("Por favor, complete los campos obligatorios: Cliente, Equipo, Técnico, Falla y Solución.")
     else:
-        # Preparar datos
         datos_formulario = {
             "cliente": cliente,
             "equipo": equipo,
@@ -202,7 +199,6 @@ if submitted:
             "Resultado Final (Después)": img_despues
         }
 
-        # Generar PDF
         with st.spinner('Generando PDF...'):
             try:
                 pdf_bytes = generar_pdf(datos_formulario, imgs_para_pdf)
@@ -216,5 +212,5 @@ if submitted:
                     mime="application/pdf"
                 )
             except Exception as e:
-                st.error(f"Error CRÍTICO al generar el PDF. Detalle: {type(e).__name__}. Esto suele indicar un problema con caracteres no soportados o fallo de la librería FPDF.")
-
+                # Si falla incluso con FreeSerif, el problema es en el ambiente de ejecución
+                st.error(f"Error CRÍTICO al generar el PDF. Detalle: {type(e).__name__}. Por favor, verifique que su 'requirements.txt' esté correctamente guardado en GitHub con las 3 librerías: streamlit, fpdf2, fonttools.")
