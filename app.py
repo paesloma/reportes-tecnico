@@ -165,7 +165,9 @@ if submitted:
             "costo": costo
         }
         
-        # Preparar imágenes
+      # Preparar imágenes
         imgs_para_pdf = {
             "Estado Inicial (Antes)": img_antes,
-            "Resultado Final
+            "Resultado Final (Después)": img_despues
+        }
+
