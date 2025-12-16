@@ -1,7 +1,7 @@
 import streamlit as st
 from datetime import date
 from io import BytesIO
-from PIL import Image as PilImage # Importamos Pillow con alias
+from PIL import Image as PilImage 
 import os
 
 # Importaciones de ReportLab
@@ -25,7 +25,7 @@ def generar_pdf(datos, imagenes_cargadas):
     
     # Estilo base
     estilo_normal = styles['Normal']
-    estilo_normal.fontName = 'Helvetica' # Fuente robusta por defecto
+    estilo_normal.fontName = 'Helvetica'
     estilo_normal.fontSize = 10
     
     # Estilos personalizados para el reporte
@@ -37,6 +37,18 @@ def generar_pdf(datos, imagenes_cargadas):
     
     story = []
 
+    # --- 0. Logo de la Empresa ---
+    LOGO_PATH = "logo.png"
+    if os.path.exists(LOGO_PATH):
+        try:
+            # Insertamos el logo en la esquina superior izquierda
+            logo = Image(LOGO_PATH, width=1.0 * inch, height=1.0 * inch) # Ajusta el tamaño según necesites
+            logo.hAlign = 'LEFT'
+            story.append(logo)
+            story.append(Spacer(1, 0.1 * inch))
+        except Exception as e:
+            st.warning(f"No se pudo cargar el logo 'logo.png'. Error: {type(e).__name__}")
+    
     # --- Cabecera y Título ---
     story.append(Paragraph("REPORTE DE SERVICIO TÉCNICO", estilo_titulo))
     story.append(Spacer(1, 0.2 * inch))
@@ -75,7 +87,7 @@ def generar_pdf(datos, imagenes_cargadas):
     story.append(Paragraph(f"<b>COSTO TOTAL DEL SERVICIO: ${datos['costo']:.2f}</b>", estilo_costo))
 
     # --- 4. Evidencia Fotográfica ---
-    if imagenes_cargadas: # Verificamos si hay imágenes en la lista
+    if imagenes_cargadas:
         story.append(Paragraph("4. Evidencia Fotográfica", estilo_seccion))
         story.append(Spacer(1, 0.1 * inch))
         
@@ -100,7 +112,6 @@ def generar_pdf(datos, imagenes_cargadas):
                 img_buffer.seek(0)
                 
                 # ReportLab lee el buffer de bytes
-                # Usamos una imagen con un ancho limitado para que quepan en la página
                 img = Image(img_buffer, width=3.0 * inch, height=3.0 * inch) 
                 story.append(img)
                 story.append(Spacer(1, 0.2 * inch))
@@ -156,11 +167,11 @@ with st.form("formulario_reporte"):
     
     st.markdown("### 📸 Evidencia Fotográfica (Carga Múltiple)")
     
-    # CAMBIO CLAVE: Carga de múltiples archivos
+    # Carga de múltiples archivos
     imagenes_cargadas = st.file_uploader(
         "Cargar Fotos (JPEG, PNG)", 
         type=['jpg', 'png', 'jpeg'],
-        accept_multiple_files=True,  # ESTO PERMITE LA CARGA MÚLTIPLE
+        accept_multiple_files=True,
         key="imgs_multiples"
     )
 
@@ -182,7 +193,7 @@ if submitted:
         }
         
         # Pasamos la lista de archivos al generador
-        with st.spinner('Generando PDF con ReportLab (Versión Múltiple)...'):
+        with st.spinner('Generando PDF con Logo...'):
             try:
                 pdf_bytes = generar_pdf(datos_formulario, imagenes_cargadas)
                 st.success(f"¡Reporte generado con éxito! Se procesaron {len(imagenes_cargadas) if imagenes_cargadas else 0} imágenes.")
@@ -195,4 +206,4 @@ if submitted:
                     mime="application/pdf"
                 )
             except Exception as e:
-                st.error(f"Error CRÍTICO final al generar el PDF. Detalle: {type(e).__name__}. Verifique el 'requirements.txt' y la estabilidad del entorno.")
+                st.error(f"Error CRÍTICO final al generar el PDF. Detalle: {type(e).__name__}. Asegúrese de que 'logo.png' exista en la raíz.")
