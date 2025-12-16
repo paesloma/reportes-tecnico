@@ -1,140 +1,134 @@
 import streamlit as st
-from fpdf import FPDF
 import tempfile
 import os
 from datetime import date
 from io import BytesIO
 
+# Importaciones de ReportLab
+from reportlab.lib.pagesizes import letter
+from reportlab.lib.styles import getSampleStyleSheet, ParagraphStyle
+from reportlab.platypus import SimpleDocTemplate, Paragraph, Spacer, Image, Table, TableStyle
+from reportlab.lib.units import inch
+from reportlab.lib import colors
+
 # --- Configuración de la página ---
 st.set_page_config(page_title="Generador de Reportes Técnicos", layout="centered")
 
-# --- Lógica del PDF ---
-# Usamos Helvetica (similar a Arial) y codificamos los textos a latin-1 para máxima estabilidad
-# en entornos de nube y soporte básico de acentos/ñ sin necesidad de fonttools.
-
-class PDF(FPDF):
-    def __init__(self, orientation='P', unit='mm', format='A4'):
-        super().__init__(orientation, unit, format)
-        self.font_family = "Helvetica" # La fuente más estable de FPDF
-
-    def header(self):
-        if os.path.exists("logo.png"):
-            self.image('logo.png', 10, 8, 30) 
-            self.ln(25) 
-        else:
-            self.ln(10)
-
-        self.set_font(self.font_family, 'B', 15)
-        self.cell(0, 10, 'REPORTE DE SERVICIO TÉCNICO', 0, 1, 'C')
-        self.ln(5)
-
-    def footer(self):
-        self.set_y(-15)
-        self.set_font(self.font_family, '', 8) 
-        self.cell(0, 10, f'Página {self.page_no()}', 0, 0, 'C')
-
 def generar_pdf(datos, imagenes):
-    pdf = PDF()
-    pdf.add_page()
-    pdf.set_font(pdf.font_family, size=12) 
-
-    # Función auxiliar para codificar texto de forma segura
-    def codificar_texto(texto):
-        # Codifica a latin-1 (para acentos/ñ) y reemplaza caracteres no soportados por '?'.
-        return texto.encode('latin-1', 'replace').decode('latin-1')
-
-    # 1. Información del Cliente
-    pdf.set_fill_color(230, 230, 230)
-    pdf.cell(0, 10, "1. Información del Cliente y Equipo", 0, 1, 'L', fill=True)
-    pdf.ln(2)
+    # Usaremos BytesIO para escribir el PDF directamente en la memoria
+    buffer = BytesIO()
+    doc = SimpleDocTemplate(buffer, pagesize=letter,
+                            topMargin=0.5 * inch, bottomMargin=0.5 * inch,
+                            leftMargin=0.5 * inch, rightMargin=0.5 * inch)
     
-    # Datos del cliente y equipo
-    pdf.set_font(pdf.font_family, 'B', 12)
-    pdf.cell(40, 10, "Cliente:", 0, 0)
-    pdf.set_font(pdf.font_family, '', 12)
-    pdf.cell(0, 10, codificar_texto(datos['cliente']), 0, 1)
+    styles = getSampleStyleSheet()
     
-    pdf.set_font(pdf.font_family, 'B', 12)
-    pdf.cell(40, 10, "Fecha:", 0, 0)
-    pdf.set_font(pdf.font_family, '', 12)
-    pdf.cell(0, 10, str(datos['fecha']), 0, 1)
-
-    pdf.set_font(pdf.font_family, 'B', 12)
-    pdf.cell(40, 10, "Dispositivo:", 0, 0)
-    pdf.set_font(pdf.font_family, '', 12)
-    pdf.cell(0, 10, codificar_texto(datos['equipo']), 0, 1)
-
-    pdf.set_font(pdf.font_family, 'B', 12)
-    pdf.cell(40, 10, "Técnico:", 0, 0)
-    pdf.set_font(pdf.font_family, '', 12)
-    pdf.cell(0, 10, codificar_texto(datos['tecnico']), 0, 1)
-    pdf.ln(5)
-
-    # 2. Detalles Técnicos
-    pdf.cell(0, 10, "2. Diagnóstico y Solución", 0, 1, 'L', fill=True)
-    pdf.ln(2)
+    # Estilo base
+    estilo_normal = styles['Normal']
+    estilo_normal.fontName = 'Helvetica' # Fuente robusta por defecto
+    estilo_normal.fontSize = 10
     
-    # Falla Reportada
-    pdf.set_font(pdf.font_family, 'B', 12)
-    pdf.multi_cell(0, 5, "Falla Reportada:")
-    pdf.set_font(pdf.font_family, '', 12)
-    pdf.multi_cell(0, 5, codificar_texto(datos['falla']))
-    pdf.ln(3)
+    # Estilos personalizados para el reporte
+    estilo_titulo = ParagraphStyle('Title', parent=styles['Heading1'], fontSize=16, alignment=1, spaceAfter=12, fontName='Helvetica-Bold')
+    estilo_seccion = ParagraphStyle('Section', parent=styles['Heading2'], fontSize=12, spaceAfter=6, fontName='Helvetica-Bold', backColor=colors.lightgrey, borderPadding=(0,0,0,0))
+    estilo_campo_bold = ParagraphStyle('FieldBold', parent=estilo_normal, fontName='Helvetica-Bold', fontSize=10, spaceAfter=0)
+    estilo_campo_valor = ParagraphStyle('FieldValue', parent=estilo_normal, fontSize=10, spaceAfter=6)
+    estilo_costo = ParagraphStyle('Cost', parent=estilo_titulo, fontSize=14, spaceBefore=12, spaceAfter=12, alignment=0)
+    
+    story = []
 
-    # Trabajo Realizado
-    pdf.set_font(pdf.font_family, 'B', 12)
-    pdf.multi_cell(0, 5, "Trabajo Realizado:")
-    pdf.set_font(pdf.font_family, '', 12)
-    pdf.multi_cell(0, 5, codificar_texto(datos['solucion']))
-    pdf.ln(5)
+    # --- Cabecera y Título ---
+    story.append(Paragraph("REPORTE DE SERVICIO TÉCNICO", estilo_titulo))
+    story.append(Spacer(1, 0.2 * inch))
+    
+    # --- 1. Información del Cliente y Equipo ---
+    story.append(Paragraph("1. Información del Cliente y Equipo", estilo_seccion))
 
-    # 3. Costo Total
-    pdf.set_font(pdf.font_family, 'B', 14)
-    pdf.cell(100, 10, "COSTO TOTAL DEL SERVICIO:", 0, 0)
-    pdf.cell(0, 10, f"${datos['costo']:.2f}", 0, 1)
-    pdf.ln(5)
+    data_cliente = [
+        [Paragraph("<b>Cliente:</b>", estilo_campo_bold), Paragraph(datos['cliente'], estilo_campo_valor), 
+         Paragraph("<b>Fecha:</b>", estilo_campo_bold), Paragraph(str(datos['fecha']), estilo_campo_valor)],
+        [Paragraph("<b>Dispositivo:</b>", estilo_campo_bold), Paragraph(datos['equipo'], estilo_campo_valor),
+         Paragraph("<b>Técnico:</b>", estilo_campo_bold), Paragraph(datos['tecnico'], estilo_campo_valor)],
+    ]
+    
+    tabla_cliente = Table(data_cliente, colWidths=[1.0 * inch, 2.5 * inch, 1.0 * inch, 2.5 * inch])
+    tabla_cliente.setStyle(TableStyle([
+        ('VALIGN', (0,0), (-1,-1), 'TOP'),
+        ('GRID', (0,0), (-1,-1), 0.25, colors.white), # Ocultar grid
+        ('FONTNAME', (0,0), (-1,-1), 'Helvetica'),
+    ]))
+    story.append(tabla_cliente)
+    story.append(Spacer(1, 0.1 * inch))
 
-    # 4. Evidencia Fotográfica (Imágenes)
-    if any(imagenes.values()): 
-        pdf.cell(0, 10, "4. Evidencia Fotográfica", 0, 1, 'L', fill=True)
-        pdf.ln(5)
-        
+    # --- 2. Diagnóstico y Solución ---
+    story.append(Paragraph("2. Diagnóstico y Solución", estilo_seccion))
+    
+    story.append(Paragraph("<b>Falla Reportada:</b>", estilo_campo_bold))
+    story.append(Paragraph(datos['falla'], estilo_campo_valor))
+    story.append(Spacer(1, 0.1 * inch))
+    
+    story.append(Paragraph("<b>Trabajo Realizado:</b>", estilo_campo_bold))
+    story.append(Paragraph(datos['solucion'], estilo_campo_valor))
+    story.append(Spacer(1, 0.2 * inch))
+
+    # --- 3. Costo Total ---
+    story.append(Paragraph(f"<b>COSTO TOTAL DEL SERVICIO: ${datos['costo']:.2f}</b>", estilo_costo))
+
+    # --- 4. Evidencia Fotográfica ---
+    if any(imagenes.values()):
+        story.append(Paragraph("4. Evidencia Fotográfica", estilo_seccion))
+        story.append(Spacer(1, 0.1 * inch))
+
         for descripcion, archivo_img in imagenes.items():
-            temp_path = None
             if archivo_img is not None:
-                pdf.set_font(pdf.font_family, 'B', 12)
-                pdf.cell(0, 10, codificar_texto(descripcion), 0, 1)
+                story.append(Paragraph(f"<b>{descripcion}:</b>", estilo_campo_bold))
                 
                 try:
                     archivo_img.seek(0)
                     
+                    # ReportLab necesita la imagen guardada o un BytesIO
+                    temp_path = None
                     suffix = os.path.splitext(archivo_img.name)[1]
                     with tempfile.NamedTemporaryFile(delete=False, suffix=suffix) as temp_file:
                         temp_file.write(archivo_img.read())
                         temp_path = temp_file.name
                     
-                    pdf.image(temp_path, w=100) 
+                    # Insertar imagen. Ajustar el tamaño si es necesario (ej: width=3.0 * inch)
+                    img = Image(temp_path, width=3.0 * inch, height=3.0 * inch)
+                    story.append(img)
+                    story.append(Spacer(1, 0.2 * inch))
                     
                 except Exception as e:
-                    pdf.set_font(pdf.font_family, '', 10)
-                    pdf.cell(0, 10, f"(Error al cargar imagen. Detalle: {type(e).__name__})", 0, 1)
+                    story.append(Paragraph(f"(Error al cargar imagen. Tipo de fallo: {type(e).__name__})", estilo_campo_valor))
+                    st.warning(f"Advertencia: No se pudo incluir la imagen '{descripcion}'.")
                 
                 finally:
                     if temp_path and os.path.exists(temp_path):
                         os.remove(temp_path)
-                
-                pdf.ln(5)
 
-    # 5. Firmas
-    pdf.ln(10)
-    pdf.set_font(pdf.font_family, '', 10)
-    pdf.cell(90, 10, "_______________________", ln=0, align='C')
-    pdf.cell(90, 10, "_______________________", ln=1, align='C')
-    pdf.cell(90, 5, "Firma del Técnico", ln=0, align='C')
-    pdf.cell(90, 5, "Firma del Cliente", ln=1, align='C')
-
-    # **CRÍTICO PARA STREAMLIT**: devolver los bytes con dest='B'
-    return pdf.output(dest='B')
+    # --- 5. Firmas ---
+    story.append(Spacer(1, 0.5 * inch))
+    
+    # Usamos una tabla para alinear las firmas
+    data_firmas = [
+        ["_______________________", "_______________________"],
+        ["Firma del Técnico", "Firma del Cliente"]
+    ]
+    tabla_firmas = Table(data_firmas, colWidths=[3.25 * inch, 3.25 * inch])
+    tabla_firmas.setStyle(TableStyle([
+        ('ALIGN', (0,0), (-1,-1), 'CENTER'),
+        ('VALIGN', (0,0), (-1,-1), 'TOP'),
+        ('FONTNAME', (0,0), (-1,-1), 'Helvetica'),
+        ('GRID', (0,0), (-1,-1), 0.25, colors.white),
+    ]))
+    story.append(tabla_firmas)
+    
+    # Construir el documento
+    doc.build(story)
+    
+    # Obtener los bytes del buffer para Streamlit
+    buffer.seek(0)
+    return buffer.read()
 
 # --- Interfaz del Formulario (Streamlit) ---
 st.title("🛠️ Generador de Reporte Técnico")
@@ -186,10 +180,10 @@ if submitted:
             "Resultado Final (Después)": img_despues
         }
 
-        with st.spinner('Generando PDF...'):
+        with st.spinner('Generando PDF con ReportLab...'):
             try:
                 pdf_bytes = generar_pdf(datos_formulario, imgs_para_pdf)
-                st.success("¡Reporte generado con éxito! Puede descargarlo a continuación.")
+                st.success("¡Reporte generado con éxito! El uso de ReportLab elimina los fallos conocidos de FPDF.")
                 
                 nombre_archivo = f"Reporte_{cliente.replace(' ', '_')}_{date.today()}.pdf"
                 st.download_button(
@@ -199,5 +193,5 @@ if submitted:
                     mime="application/pdf"
                 )
             except Exception as e:
-                # Si falla incluso con esta codificación, es un problema del entorno.
-                st.error(f"Error CRÍTICO al generar el PDF. Detalle: {type(e).__name__}. Verifique sus datos y que el 'requirements.txt' solo tenga 'streamlit' y 'fpdf2'.")
+                # Si falla aquí, el problema es en el ambiente base de Streamlit.
+                st.error(f"Error CRÍTICO al generar el PDF. Detalle: {type(e).__name__}. Por favor, asegúrese de que el 'requirements.txt' esté correctamente guardado con 'streamlit' y 'reportlab'.")
