@@ -177,4 +177,41 @@ with st.form("formulario_reporte"):
     with col_img2:
         img_despues = st.file_uploader("Foto del Resultado (Después)", type=['jpg', 'png', 'jpeg'], key="img_despues")
 
-    submitted = st.form_submit_button("
+    submitted = st.form_submit_button("✅ Generar Reporte PDF")
+
+# --- Generación y Descarga ---
+if submitted:
+    if not cliente or not equipo or not tecnico or not falla or not solucion:
+        st.error("Por favor, complete los campos obligatorios: Cliente, Equipo, Técnico, Falla y Solución.")
+    else:
+        # Preparar datos
+        datos_formulario = {
+            "cliente": cliente,
+            "equipo": equipo,
+            "fecha": fecha,
+            "tecnico": tecnico,
+            "falla": falla,
+            "solucion": solucion,
+            "costo": costo
+        }
+        
+        imgs_para_pdf = {
+            "Estado Inicial (Antes)": img_antes,
+            "Resultado Final (Después)": img_despues
+        }
+
+        # Generar PDF
+        with st.spinner('Generando PDF...'):
+            try:
+                pdf_bytes = generar_pdf(datos_formulario, imgs_para_pdf)
+                st.success("¡Reporte generado con éxito! Puede descargarlo a continuación.")
+                
+                nombre_archivo = f"Reporte_{cliente.replace(' ', '_')}_{date.today()}.pdf"
+                st.download_button(
+                    label="📥 Descargar PDF Final",
+                    data=pdf_bytes,
+                    file_name=nombre_archivo,
+                    mime="application/pdf"
+                )
+            except Exception as e:
+                st.error(f"Error CRÍTICO al generar el PDF. Detalle: {type(e).__name__}. Esto suele indicar un problema con caracteres no soportados o fallo de la librería FPDF.")
