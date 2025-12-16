@@ -12,7 +12,8 @@ from reportlab.lib.units import inch
 from reportlab.lib import colors
 
 # --- Configuración de la página ---
-st.set_page_config(page_title="🛠️ Generador de Reportes Técnicos", layout="centered")
+# CAMBIO DE TÍTULO PRINCIPAL
+st.set_page_config(page_title="🔧 Informe Técnico", layout="centered")
 
 def generar_pdf(datos, imagenes_cargadas):
     # Usaremos BytesIO para escribir el PDF directamente en la memoria
@@ -33,7 +34,6 @@ def generar_pdf(datos, imagenes_cargadas):
     estilo_seccion = ParagraphStyle('Section', parent=styles['Heading2'], fontSize=12, spaceAfter=6, fontName='Helvetica-Bold', backColor=colors.lightgrey, borderPadding=(0,0,0,0))
     estilo_campo_bold = ParagraphStyle('FieldBold', parent=estilo_normal, fontName='Helvetica-Bold', fontSize=10, spaceAfter=0)
     estilo_campo_valor = ParagraphStyle('FieldValue', parent=estilo_normal, fontSize=10, spaceAfter=6)
-    # ELIMINAMOS estilo_costo
 
     story = []
 
@@ -50,7 +50,8 @@ def generar_pdf(datos, imagenes_cargadas):
             st.warning(f"No se pudo cargar el logo 'logo.png'. Error: {type(e).__name__}")
     
     # --- Cabecera y Título ---
-    story.append(Paragraph("REPORTE DE SERVICIO TÉCNICO", estilo_titulo))
+    # CAMBIO DE TÍTULO EN EL PDF
+    story.append(Paragraph("INFORME TÉCNICO DE SERVICIO", estilo_titulo))
     story.append(Spacer(1, 0.2 * inch))
     
     # --- 1. Información del Cliente y Equipo ---
@@ -82,8 +83,8 @@ def generar_pdf(datos, imagenes_cargadas):
     story.append(Paragraph("<b>Trabajo Realizado:</b>", estilo_campo_bold))
     story.append(Paragraph(datos['solucion'], estilo_campo_valor))
     story.append(Spacer(1, 0.2 * inch))
-
-    # --- 3. Evidencia Fotográfica (Se renumeró) ---
+                
+    # --- 3. Evidencia Fotográfica ---
     if imagenes_cargadas:
         story.append(Paragraph("3. Evidencia Fotográfica", estilo_seccion))
         story.append(Spacer(1, 0.1 * inch))
@@ -96,19 +97,15 @@ def generar_pdf(datos, imagenes_cargadas):
             try:
                 archivo_img.seek(0)
                 
-                # Usamos Pillow para convertir la imagen a un buffer de bytes estable (JPEG)
                 img_pillow = PilImage.open(archivo_img)
-                
                 img_buffer = BytesIO()
                 
-                # Forzamos JPEG (máxima compatibilidad)
                 if img_pillow.mode in ('RGBA', 'P'):
                     img_pillow = img_pillow.convert('RGB')
                         
                 img_pillow.save(img_buffer, format='JPEG')
                 img_buffer.seek(0)
                 
-                # ReportLab lee el buffer de bytes
                 img = Image(img_buffer, width=3.0 * inch, height=3.0 * inch) 
                 story.append(img)
                 story.append(Spacer(1, 0.2 * inch))
@@ -117,7 +114,7 @@ def generar_pdf(datos, imagenes_cargadas):
                 story.append(Paragraph(f"(Error al cargar imagen. Tipo de fallo: {type(e).__name__})", estilo_campo_valor))
                 st.warning(f"Advertencia: No se pudo incluir la imagen '{descripcion}'. Fallo al procesar la imagen.")
                 
-    # --- 4. Firmas (Se renumeró) ---
+    # --- 4. Firmas ---
     story.append(Spacer(1, 0.5 * inch))
     
     # Usamos una tabla para alinear las firmas
@@ -142,42 +139,50 @@ def generar_pdf(datos, imagenes_cargadas):
     return buffer.read()
 
 # --- Interfaz del Formulario (Streamlit) ---
-st.title("🛠️ Generador de Reporte Técnico")
+st.title("🔧 Informe Técnico")
+st.markdown("Genera un informe detallado del servicio realizado, incluyendo evidencias fotográficas.")
 st.markdown("---")
 
+# Estilo mejorado: usar pestañas y columnas para una mejor organización
+
 with st.form("formulario_reporte"):
-    st.subheader("Datos Generales")
-    col1, col2 = st.columns(2)
-    
-    with col1:
-        cliente = st.text_input("Nombre del Cliente", key="cliente")
-        equipo = st.text_input("Equipo / Modelo", key="equipo")
-    
-    with col2:
-        fecha = st.date_input("Fecha del Servicio", key="fecha", value=date.today())
-        tecnico = st.text_input("Nombre del Técnico", key="tecnico")
+    tab1, tab2 = st.tabs(["📋 Detalles Generales", "📸 Evidencia"])
 
-    st.subheader("Detalles del Servicio")
-    falla = st.text_area("Falla Reportada / Problema", key="falla")
-    solucion = st.text_area("Diagnóstico y Solución Aplicada", key="solucion")
-    # ELIMINAMOS: costo = st.number_input("Costo Total ($)", min_value=0.0, key="costo")
-    
-    st.markdown("### 📸 Evidencia Fotográfica (Carga Múltiple)")
-    
-    # Carga de múltiples archivos
-    imagenes_cargadas = st.file_uploader(
-        "Cargar Fotos (JPEG, PNG)", 
-        type=['jpg', 'png', 'jpeg'],
-        accept_multiple_files=True,
-        key="imgs_multiples"
-    )
+    with tab1:
+        st.subheader("Datos del Cliente y Equipo 👤")
+        col1, col2 = st.columns(2)
+        
+        with col1:
+            cliente = st.text_input("Nombre del Cliente", key="cliente", help="Nombre completo de la persona o empresa.")
+            equipo = st.text_input("Equipo / Modelo", key="equipo", help="Modelo o descripción del dispositivo.")
+        
+        with col2:
+            fecha = st.date_input("Fecha del Servicio", key="fecha", value=date.today(), help="Día en que se realizó el servicio.")
+            tecnico = st.text_input("Nombre del Técnico", key="tecnico", help="Persona que realiza el diagnóstico y reparación.")
 
-    submitted = st.form_submit_button("✅ Generar Reporte PDF")
+        st.subheader("Diagnóstico y Solución ✅")
+        falla = st.text_area("Falla Reportada / Problema", key="falla", height=100, help="Descripción detallada del problema inicial.")
+        solucion = st.text_area("Trabajo Realizado / Solución Aplicada", key="solucion", height=150, help="Pasos de diagnóstico, reparación y configuración final.")
+
+    with tab2:
+        st.subheader("Evidencia Fotográfica 🖼️")
+        st.info("Sube todas las fotos relevantes. Se incluirán en orden en el informe.")
+        
+        # Carga de múltiples archivos
+        imagenes_cargadas = st.file_uploader(
+            "Cargar Fotos (JPEG, PNG)", 
+            type=['jpg', 'png', 'jpeg'],
+            accept_multiple_files=True,
+            key="imgs_multiples"
+        )
+    
+    st.markdown("---")
+    submitted = st.form_submit_button("💾 Generar Informe PDF")
 
 # --- Generación y Descarga ---
 if submitted:
     if not cliente or not equipo or not tecnico or not falla or not solucion:
-        st.error("Por favor, complete los campos obligatorios: Cliente, Equipo, Técnico, Falla y Solución.")
+        st.error("❌ ¡Error! Por favor, complete todos los campos obligatorios: Cliente, Equipo, Técnico, Falla y Solución.")
     else:
         datos_formulario = {
             "cliente": cliente,
@@ -186,21 +191,20 @@ if submitted:
             "tecnico": tecnico,
             "falla": falla,
             "solucion": solucion,
-            # ELIMINAMOS: "costo": costo
         }
         
         # Pasamos la lista de archivos al generador
-        with st.spinner('Generando PDF...'):
+        with st.spinner('⚙️ Generando Informe PDF...'):
             try:
                 pdf_bytes = generar_pdf(datos_formulario, imagenes_cargadas)
-                st.success(f"¡Reporte generado con éxito! Se procesaron {len(imagenes_cargadas) if imagenes_cargadas else 0} imágenes.")
+                st.success(f"✅ ¡Informe generado con éxito! Se procesaron {len(imagenes_cargadas) if imagenes_cargadas else 0} imágenes.")
                 
-                nombre_archivo = f"Reporte_{cliente.replace(' ', '_')}_{date.today()}.pdf"
+                nombre_archivo = f"Informe_Tecnico_{cliente.replace(' ', '_')}_{date.today()}.pdf"
                 st.download_button(
-                    label="📥 Descargar PDF Final",
+                    label="⬇️ Descargar PDF Final",
                     data=pdf_bytes,
                     file_name=nombre_archivo,
                     mime="application/pdf"
                 )
             except Exception as e:
-                st.error(f"Error CRÍTICO final al generar el PDF. Detalle: {type(e).__name__}.")
+                st.error(f"💥 Error CRÍTICO final al generar el PDF. Detalle: {type(e).__name__}. Verifique sus datos e imágenes.")
