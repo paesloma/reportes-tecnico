@@ -3,6 +3,7 @@ import tempfile
 import os
 from datetime import date
 from io import BytesIO
+from PIL import Image as PilImage # Importamos Pillow con alias para evitar conflictos
 
 # Importaciones de ReportLab
 from reportlab.lib.pagesizes import letter
@@ -33,7 +34,7 @@ def generar_pdf(datos, imagenes):
     estilo_seccion = ParagraphStyle('Section', parent=styles['Heading2'], fontSize=12, spaceAfter=6, fontName='Helvetica-Bold', backColor=colors.lightgrey, borderPadding=(0,0,0,0))
     estilo_campo_bold = ParagraphStyle('FieldBold', parent=estilo_normal, fontName='Helvetica-Bold', fontSize=10, spaceAfter=0)
     estilo_campo_valor = ParagraphStyle('FieldValue', parent=estilo_normal, fontSize=10, spaceAfter=6)
-    estilo_costo = ParagraphStyle('Cost', parent=estilo_titulo, fontSize=14, spaceBefore=12, spaceAfter=12, alignment=0)
+    estilo_costo = ParagraphStyle('Cost', parent=styles['Heading2'], fontSize=14, spaceBefore=12, spaceAfter=12, alignment=0, fontName='Helvetica-Bold')
     
     story = []
 
@@ -54,7 +55,7 @@ def generar_pdf(datos, imagenes):
     tabla_cliente = Table(data_cliente, colWidths=[1.0 * inch, 2.5 * inch, 1.0 * inch, 2.5 * inch])
     tabla_cliente.setStyle(TableStyle([
         ('VALIGN', (0,0), (-1,-1), 'TOP'),
-        ('GRID', (0,0), (-1,-1), 0.25, colors.white), # Ocultar grid
+        ('GRID', (0,0), (-1,-1), 0.25, colors.white),
         ('FONTNAME', (0,0), (-1,-1), 'Helvetica'),
     ]))
     story.append(tabla_cliente)
@@ -86,26 +87,28 @@ def generar_pdf(datos, imagenes):
                 try:
                     archivo_img.seek(0)
                     
-                    # ReportLab necesita la imagen guardada o un BytesIO
-                    temp_path = None
-                    suffix = os.path.splitext(archivo_img.name)[1]
-                    with tempfile.NamedTemporaryFile(delete=False, suffix=suffix) as temp_file:
-                        temp_file.write(archivo_img.read())
-                        temp_path = temp_file.name
+                    # CARGA CRÍTICA: Usamos Pillow para convertir la imagen a un formato de bytes estable (JPEG)
+                    img_pillow = PilImage.open(archivo_img)
                     
-                    # Insertar imagen. Ajustar el tamaño si es necesario (ej: width=3.0 * inch)
-                    img = Image(temp_path, width=3.0 * inch, height=3.0 * inch)
+                    # Usamos BytesIO para guardar la imagen convertida en memoria
+                    img_buffer = BytesIO()
+                    
+                    # Forzamos JPEG (máxima compatibilidad)
+                    if img_pillow.mode in ('RGBA', 'P'):
+                        img_pillow = img_pillow.convert('RGB')
+                        
+                    img_pillow.save(img_buffer, format='JPEG')
+                    img_buffer.seek(0)
+                    
+                    # ReportLab puede leer directamente el buffer de bytes si se lo pasamos con el tipo correcto
+                    img = Image(img_buffer, width=3.0 * inch, height=3.0 * inch)
                     story.append(img)
                     story.append(Spacer(1, 0.2 * inch))
                     
                 except Exception as e:
                     story.append(Paragraph(f"(Error al cargar imagen. Tipo de fallo: {type(e).__name__})", estilo_campo_valor))
-                    st.warning(f"Advertencia: No se pudo incluir la imagen '{descripcion}'.")
+                    st.warning(f"Advertencia: No se pudo incluir la imagen '{descripcion}'. Fallo al procesar la imagen.")
                 
-                finally:
-                    if temp_path and os.path.exists(temp_path):
-                        os.remove(temp_path)
-
     # --- 5. Firmas ---
     story.append(Spacer(1, 0.5 * inch))
     
@@ -180,10 +183,10 @@ if submitted:
             "Resultado Final (Después)": img_despues
         }
 
-        with st.spinner('Generando PDF con ReportLab...'):
+        with st.spinner('Generando PDF con ReportLab (Versión Estabilizada)...'):
             try:
                 pdf_bytes = generar_pdf(datos_formulario, imgs_para_pdf)
-                st.success("¡Reporte generado con éxito! El uso de ReportLab elimina los fallos conocidos de FPDF.")
+                st.success("¡Reporte generado con éxito! Esta versión es la más estable para imágenes.")
                 
                 nombre_archivo = f"Reporte_{cliente.replace(' ', '_')}_{date.today()}.pdf"
                 st.download_button(
@@ -193,5 +196,5 @@ if submitted:
                     mime="application/pdf"
                 )
             except Exception as e:
-                # Si falla aquí, el problema es en el ambiente base de Streamlit.
-                st.error(f"Error CRÍTICO al generar el PDF. Detalle: {type(e).__name__}. Por favor, asegúrese de que el 'requirements.txt' esté correctamente guardado con 'streamlit' y 'reportlab'.")
+                # Si falla aquí, el problema es en el ambiente base de Streamlit o la versión de Python.
+                st.error(f"Error CRÍTICO final al generar el PDF. Detalle: {type(e).__name__}. Por favor, verifique el 'requirements.txt' y la versión de Python en su despliegue.")
