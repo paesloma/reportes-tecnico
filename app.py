@@ -3,6 +3,7 @@ from fpdf import FPDF
 import tempfile
 import os
 from datetime import date
+from io import BytesIO
 
 # --- Configuración de la página ---
 st.set_page_config(page_title="Generador de Reportes Técnicos", layout="centered")
@@ -10,13 +11,11 @@ st.set_page_config(page_title="Generador de Reportes Técnicos", layout="centere
 # --- Lógica del PDF ---
 class PDF(FPDF):
     def header(self):
-        # Intentar cargar logo si está disponible en la raíz (ej: logo.png)
         if os.path.exists("logo.png"):
-            # Ajusta las coordenadas y el tamaño según tu logo
             self.image('logo.png', 10, 8, 30) 
-            self.ln(25) # Baja el cursor para no escribir encima del logo
+            self.ln(25) 
         else:
-            self.ln(10) # Baja solo un poco si no hay logo
+            self.ln(10)
 
         self.set_font('Arial', 'B', 15)
         self.cell(0, 10, 'REPORTE DE SERVICIO TÉCNICO', 0, 1, 'C')
@@ -37,6 +36,7 @@ def generar_pdf(datos, imagenes):
     pdf.cell(0, 10, "1. Información del Cliente y Equipo", 0, 1, 'L', fill=True)
     pdf.ln(2)
     
+    # ... (Resto de la información de Cliente/Equipo)
     pdf.set_font("Arial", 'B', 12)
     pdf.cell(40, 10, "Cliente:", 0, 0)
     pdf.set_font("Arial", '', 12)
@@ -80,7 +80,7 @@ def generar_pdf(datos, imagenes):
     pdf.ln(5)
 
     # 4. Evidencia Fotográfica (Imágenes)
-    if any(imagenes.values()): # Solo si se subió alguna imagen
+    if any(imagenes.values()): 
         pdf.cell(0, 10, "4. Evidencia Fotográfica", 0, 1, 'L', fill=True)
         pdf.ln(5)
         
@@ -89,20 +89,28 @@ def generar_pdf(datos, imagenes):
                 pdf.set_font("Arial", 'B', 12)
                 pdf.cell(0, 10, descripcion, 0, 1)
                 
-                # Crear archivo temporal para la imagen
-                with tempfile.NamedTemporaryFile(delete=False, suffix=".jpg") as temp_file:
-                    temp_file.write(archivo_img.read())
-                    temp_path = temp_file.name
-                
-                # Insertar imagen (ajustada a un ancho de 80mm para dos columnas, o 100mm para una)
+                temp_path = None # Inicializamos la ruta temporal
                 try:
+                    # Crear archivo temporal para la imagen
+                    with tempfile.NamedTemporaryFile(delete=False, suffix=".jpg") as temp_file:
+                        # Necesitamos reiniciar el puntero para leer los bytes desde el inicio
+                        archivo_img.seek(0)
+                        temp_file.write(archivo_img.read())
+                        temp_path = temp_file.name
+                    
+                    # Insertar imagen 
                     pdf.image(temp_path, w=100) 
+                    
                 except Exception as e:
-                    pdf.cell(0, 10, f"(Error al cargar imagen: {e})", 0, 1)
+                    # Si falla la imagen, simplemente lo notifica y continúa
+                    pdf.cell(0, 10, f"(Error al cargar imagen: {type(e).__name__})", 0, 1)
+                
+                finally:
+                    # Borrar archivo temporal si existe
+                    if temp_path and os.path.exists(temp_path):
+                        os.remove(temp_path)
                 
                 pdf.ln(5)
-                # Borrar archivo temporal
-                os.remove(temp_path)
 
     # 5. Firmas
     pdf.ln(10)
@@ -113,9 +121,7 @@ def generar_pdf(datos, imagenes):
     pdf.cell(90, 5, "Firma del Cliente", ln=1, align='C')
 
 
-    # -----------------------------------------------------------------
-    # CORRECCIÓN CRÍTICA: dest='B' (Binary) es la forma correcta para Streamlit.
-    # -----------------------------------------------------------------
+    # Corrección final: devuelve los bytes para Streamlit
     return pdf.output(dest='B')
 
 # --- Interfaz del Formulario (Streamlit) ---
@@ -146,7 +152,6 @@ with st.form("formulario_reporte"):
     with col_img2:
         img_despues = st.file_uploader("Foto del Resultado (Después)", type=['jpg', 'png', 'jpeg'], key="img_despues")
 
-    # Botón de envío del formulario
     submitted = st.form_submit_button("✅ Generar Reporte PDF")
 
 # --- Generación y Descarga ---
@@ -165,9 +170,26 @@ if submitted:
             "costo": costo
         }
         
-      # Preparar imágenes
+        # Preparar imágenes
         imgs_para_pdf = {
             "Estado Inicial (Antes)": img_antes,
             "Resultado Final (Después)": img_despues
         }
 
+        # Generar PDF
+        with st.spinner('Generando PDF...'):
+            try:
+                pdf_bytes = generar_pdf(datos_formulario, imgs_para_pdf)
+                st.success("¡Reporte generado con éxito! Puede descargarlo a continuación.")
+                
+                # Botón de Descarga
+                nombre_archivo = f"Reporte_{cliente.replace(' ', '_')}_{date.today()}.pdf"
+                st.download_button(
+                    label="📥 Descargar PDF Final",
+                    data=pdf_bytes,
+                    file_name=nombre_archivo,
+                    mime="application/pdf"
+                )
+            except Exception as e:
+                # Si falla algo desconocido, mostramos el error general
+                st.error(f"Error al generar el PDF. Revise el log. Detalle: {type(e).__name__}")
