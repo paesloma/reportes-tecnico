@@ -12,7 +12,6 @@ from reportlab.lib.units import inch
 from reportlab.lib import colors
 
 # --- Configuración de la página ---
-# CAMBIO DE TÍTULO PRINCIPAL
 st.set_page_config(page_title="🔧 Informe Técnico", layout="centered")
 
 def generar_pdf(datos, imagenes_cargadas):
@@ -50,7 +49,6 @@ def generar_pdf(datos, imagenes_cargadas):
             st.warning(f"No se pudo cargar el logo 'logo.png'. Error: {type(e).__name__}")
     
     # --- Cabecera y Título ---
-    # CAMBIO DE TÍTULO EN EL PDF
     story.append(Paragraph("INFORME TÉCNICO DE SERVICIO", estilo_titulo))
     story.append(Spacer(1, 0.2 * inch))
     
@@ -91,7 +89,13 @@ def generar_pdf(datos, imagenes_cargadas):
         
         # Iteramos sobre CADA imagen cargada
         for i, archivo_img in enumerate(imagenes_cargadas):
-            descripcion = f"Imagen {i + 1} ({archivo_img.name})"
+            
+            # --- CAMBIO CLAVE AQUÍ ---
+            # Extraemos el nombre base del archivo sin la extensión.
+            nombre_base = os.path.splitext(archivo_img.name)[0]
+            descripcion = f"Imagen {i + 1} ({nombre_base})"
+            # ---------------------------
+            
             story.append(Paragraph(f"<b>{descripcion}:</b>", estilo_campo_bold))
             
             try:
