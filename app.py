@@ -33,6 +33,10 @@ def generar_pdf(datos, imagenes_cargadas):
     estilo_seccion = ParagraphStyle('Section', parent=styles['Heading2'], fontSize=12, spaceAfter=6, fontName='Helvetica-Bold', backColor=colors.lightgrey, borderPadding=(0,0,0,0))
     estilo_campo_bold = ParagraphStyle('FieldBold', parent=estilo_normal, fontName='Helvetica-Bold', fontSize=10, spaceAfter=0)
     estilo_campo_valor = ParagraphStyle('FieldValue', parent=estilo_normal, fontSize=10, spaceAfter=6)
+    
+    # NUEVO ESTILO: para el nombre en la firma (centrado y sin espacio inferior)
+    estilo_firma_nombre = ParagraphStyle('FirmaNombre', parent=estilo_normal, alignment=1, fontSize=10, spaceAfter=0)
+
 
     story = []
 
@@ -89,13 +93,8 @@ def generar_pdf(datos, imagenes_cargadas):
         
         # Iteramos sobre CADA imagen cargada
         for i, archivo_img in enumerate(imagenes_cargadas):
-            
-            # --- CAMBIO CLAVE AQUÍ ---
-            # Extraemos el nombre base del archivo sin la extensión.
             nombre_base = os.path.splitext(archivo_img.name)[0]
             descripcion = f"Imagen {i + 1} ({nombre_base})"
-            # ---------------------------
-            
             story.append(Paragraph(f"<b>{descripcion}:</b>", estilo_campo_bold))
             
             try:
@@ -122,8 +121,15 @@ def generar_pdf(datos, imagenes_cargadas):
     story.append(Spacer(1, 0.5 * inch))
     
     # Usamos una tabla para alinear las firmas
+    nombre_tecnico = datos['tecnico']
+    
+    # CAMBIO CLAVE: Nueva fila para el nombre del técnico
     data_firmas = [
+        # Fila 1: Nombre del técnico (se deja vacío el del cliente por ahora)
+        [Paragraph(nombre_tecnico, estilo_firma_nombre), Paragraph("", estilo_firma_nombre)],
+        # Fila 2: Líneas de firma
         ["_______________________", "_______________________"],
+        # Fila 3: Etiquetas
         ["Firma del Técnico", "Firma del Cliente"]
     ]
     tabla_firmas = Table(data_firmas, colWidths=[3.25 * inch, 3.25 * inch])
@@ -131,7 +137,9 @@ def generar_pdf(datos, imagenes_cargadas):
         ('ALIGN', (0,0), (-1,-1), 'CENTER'),
         ('VALIGN', (0,0), (-1,-1), 'TOP'),
         ('FONTNAME', (0,0), (-1,-1), 'Helvetica'),
-        ('GRID', (0,0), (-1,-1), 0.25, colors.white),
+        # Ajustes de padding para que el nombre quede justo encima de la línea
+        ('BOTTOMPADDING', (0,0), (-1,0), 0),
+        ('TOPPADDING', (0,1), (-1,1), 0),
     ]))
     story.append(tabla_firmas)
     
