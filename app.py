@@ -33,8 +33,8 @@ def generar_pdf(datos, imagenes_cargadas):
     estilo_seccion = ParagraphStyle('Section', parent=styles['Heading2'], fontSize=12, spaceAfter=6, fontName='Helvetica-Bold', backColor=colors.lightgrey, borderPadding=(0,0,0,0))
     estilo_campo_bold = ParagraphStyle('FieldBold', parent=estilo_normal, fontName='Helvetica-Bold', fontSize=10, spaceAfter=0)
     estilo_campo_valor = ParagraphStyle('FieldValue', parent=estilo_normal, fontSize=10, spaceAfter=6)
-    estilo_costo = ParagraphStyle('Cost', parent=styles['Heading2'], fontSize=14, spaceBefore=12, spaceAfter=12, alignment=0, fontName='Helvetica-Bold')
-    
+    # ELIMINAMOS estilo_costo
+
     story = []
 
     # --- 0. Logo de la Empresa ---
@@ -83,12 +83,9 @@ def generar_pdf(datos, imagenes_cargadas):
     story.append(Paragraph(datos['solucion'], estilo_campo_valor))
     story.append(Spacer(1, 0.2 * inch))
 
-    # --- 3. Costo Total ---
-    story.append(Paragraph(f"<b>COSTO TOTAL DEL SERVICIO: ${datos['costo']:.2f}</b>", estilo_costo))
-
-    # --- 4. Evidencia Fotográfica ---
+    # --- 3. Evidencia Fotográfica (Se renumeró) ---
     if imagenes_cargadas:
-        story.append(Paragraph("4. Evidencia Fotográfica", estilo_seccion))
+        story.append(Paragraph("3. Evidencia Fotográfica", estilo_seccion))
         story.append(Spacer(1, 0.1 * inch))
         
         # Iteramos sobre CADA imagen cargada
@@ -99,7 +96,7 @@ def generar_pdf(datos, imagenes_cargadas):
             try:
                 archivo_img.seek(0)
                 
-                # CARGA CRÍTICA: Usamos Pillow para convertir la imagen a un buffer de bytes estable (JPEG)
+                # Usamos Pillow para convertir la imagen a un buffer de bytes estable (JPEG)
                 img_pillow = PilImage.open(archivo_img)
                 
                 img_buffer = BytesIO()
@@ -120,7 +117,7 @@ def generar_pdf(datos, imagenes_cargadas):
                 story.append(Paragraph(f"(Error al cargar imagen. Tipo de fallo: {type(e).__name__})", estilo_campo_valor))
                 st.warning(f"Advertencia: No se pudo incluir la imagen '{descripcion}'. Fallo al procesar la imagen.")
                 
-    # --- 5. Firmas ---
+    # --- 4. Firmas (Se renumeró) ---
     story.append(Spacer(1, 0.5 * inch))
     
     # Usamos una tabla para alinear las firmas
@@ -163,7 +160,7 @@ with st.form("formulario_reporte"):
     st.subheader("Detalles del Servicio")
     falla = st.text_area("Falla Reportada / Problema", key="falla")
     solucion = st.text_area("Diagnóstico y Solución Aplicada", key="solucion")
-    costo = st.number_input("Costo Total ($)", min_value=0.0, key="costo")
+    # ELIMINAMOS: costo = st.number_input("Costo Total ($)", min_value=0.0, key="costo")
     
     st.markdown("### 📸 Evidencia Fotográfica (Carga Múltiple)")
     
@@ -189,11 +186,11 @@ if submitted:
             "tecnico": tecnico,
             "falla": falla,
             "solucion": solucion,
-            "costo": costo
+            # ELIMINAMOS: "costo": costo
         }
         
         # Pasamos la lista de archivos al generador
-        with st.spinner('Generando PDF con Logo...'):
+        with st.spinner('Generando PDF...'):
             try:
                 pdf_bytes = generar_pdf(datos_formulario, imagenes_cargadas)
                 st.success(f"¡Reporte generado con éxito! Se procesaron {len(imagenes_cargadas) if imagenes_cargadas else 0} imágenes.")
@@ -206,4 +203,4 @@ if submitted:
                     mime="application/pdf"
                 )
             except Exception as e:
-                st.error(f"Error CRÍTICO final al generar el PDF. Detalle: {type(e).__name__}. Asegúrese de que 'logo.png' exista en la raíz.")
+                st.error(f"Error CRÍTICO final al generar el PDF. Detalle: {type(e).__name__}.")
