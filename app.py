@@ -141,4 +141,23 @@ with st.form("formulario_reporte"):
             tecnico = st.selectbox("Nombre del Técnico", options=LISTA_TECNICOS)
 
         st.subheader("Diagnóstico y Solución")
-        falla = st.text_area("Falla
+        falla = st.text_area("Falla Reportada")
+        solucion = st.text_area("Trabajo Realizado")
+
+    with tab2:
+        st.subheader("Evidencia Fotográfica")
+        imagenes_cargadas = st.file_uploader("Cargar Fotos", type=['jpg', 'png', 'jpeg'], accept_multiple_files=True)
+    
+    submitted = st.form_submit_button("💾 Generar Informe PDF")
+
+if submitted:
+    if not (cliente and equipo and falla and solucion):
+        st.error("Por favor, rellene todos los campos.")
+    else:
+        datos_formulario = {"cliente": cliente, "equipo": equipo, "fecha": fecha, "tecnico": tecnico, "falla": falla, "solucion": solucion}
+        try:
+            pdf_bytes = generar_pdf(datos_formulario, imagenes_cargadas)
+            st.success("Informe generado correctamente.")
+            st.download_button(label="⬇️ Descargar PDF", data=pdf_bytes, file_name=f"Informe_{cliente}.pdf", mime="application/pdf")
+        except Exception as e:
+            st.error(f"Error: {e}")
