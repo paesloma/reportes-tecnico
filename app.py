@@ -11,7 +11,9 @@ st.set_page_config(page_title="Generador de Reportes Técnicos", layout="centere
 # --- Lógica del PDF ---
 class PDF(FPDF):
     def header(self):
+        # Intentar cargar un logo. Si no existe, solo deja un espacio.
         if os.path.exists("logo.png"):
+            # Asegúrate de que 'logo.png' esté en el mismo directorio.
             self.image('logo.png', 10, 8, 30) 
             self.ln(25) 
         else:
@@ -27,16 +29,18 @@ class PDF(FPDF):
         self.cell(0, 10, f'Página {self.page_no()}', 0, 0, 'C')
 
 def generar_pdf(datos, imagenes):
+    # 1. Creación del objeto PDF
+    # Importante: fpdf2 maneja UTF-8 por defecto, lo que mejora el soporte de acentos.
     pdf = PDF()
     pdf.add_page()
     pdf.set_font("Arial", size=12)
 
-    # 1. Información del Cliente
+    # 2. Información del Cliente
     pdf.set_fill_color(230, 230, 230)
     pdf.cell(0, 10, "1. Información del Cliente y Equipo", 0, 1, 'L', fill=True)
     pdf.ln(2)
     
-    # ... (Resto de la información de Cliente/Equipo)
+    # Datos del cliente y equipo
     pdf.set_font("Arial", 'B', 12)
     pdf.cell(40, 10, "Cliente:", 0, 0)
     pdf.set_font("Arial", '', 12)
@@ -58,43 +62,50 @@ def generar_pdf(datos, imagenes):
     pdf.cell(0, 10, datos['tecnico'], 0, 1)
     pdf.ln(5)
 
-    # 2. Detalles Técnicos
+    # 3. Detalles Técnicos
     pdf.cell(0, 10, "2. Diagnóstico y Solución", 0, 1, 'L', fill=True)
     pdf.ln(2)
+    
+    # Falla Reportada
     pdf.set_font("Arial", 'B', 12)
     pdf.multi_cell(0, 5, "Falla Reportada:")
     pdf.set_font("Arial", '', 12)
     pdf.multi_cell(0, 5, datos['falla'])
     pdf.ln(3)
 
+    # Trabajo Realizado
     pdf.set_font("Arial", 'B', 12)
     pdf.multi_cell(0, 5, "Trabajo Realizado:")
     pdf.set_font("Arial", '', 12)
     pdf.multi_cell(0, 5, datos['solucion'])
     pdf.ln(5)
 
-    # 3. Costo Total
+    # 4. Costo Total
     pdf.set_font("Arial", 'B', 14)
     pdf.cell(100, 10, "COSTO TOTAL DEL SERVICIO:", 0, 0)
     pdf.cell(0, 10, f"${datos['costo']:.2f}", 0, 1)
     pdf.ln(5)
 
-    # 4. Evidencia Fotográfica (Imágenes)
+    # 5. Evidencia Fotográfica (Imágenes)
+    # Solo entra a este bloque si AL MENOS UNA imagen se subió (no es None).
     if any(imagenes.values()): 
         pdf.cell(0, 10, "4. Evidencia Fotográfica", 0, 1, 'L', fill=True)
         pdf.ln(5)
         
         for descripcion, archivo_img in imagenes.items():
+            temp_path = None
             if archivo_img is not None:
                 pdf.set_font("Arial", 'B', 12)
                 pdf.cell(0, 10, descripcion, 0, 1)
                 
-                temp_path = None # Inicializamos la ruta temporal
                 try:
+                    # ** CRÍTICO **: Resetear el puntero del archivo a 0 antes de leer los bytes
+                    archivo_img.seek(0)
+                    
                     # Crear archivo temporal para la imagen
-                    with tempfile.NamedTemporaryFile(delete=False, suffix=".jpg") as temp_file:
-                        # Necesitamos reiniciar el puntero para leer los bytes desde el inicio
-                        archivo_img.seek(0)
+                    # Se usa la extensión del archivo original para ayudar a FPDF2 a identificar el formato
+                    suffix = os.path.splitext(archivo_img.name)[1]
+                    with tempfile.NamedTemporaryFile(delete=False, suffix=suffix) as temp_file:
                         temp_file.write(archivo_img.read())
                         temp_path = temp_file.name
                     
@@ -102,8 +113,10 @@ def generar_pdf(datos, imagenes):
                     pdf.image(temp_path, w=100) 
                     
                 except Exception as e:
-                    # Si falla la imagen, simplemente lo notifica y continúa
-                    pdf.cell(0, 10, f"(Error al cargar imagen: {type(e).__name__})", 0, 1)
+                    # Si falla la imagen (FPDFException, formato no compatible, etc.), notifica y continúa
+                    pdf.set_font("Arial", '', 10)
+                    pdf.cell(0, 10, f"(Error al cargar imagen. Detalle: {type(e).__name__})", 0, 1)
+                    st.warning(f"Advertencia: No se pudo incluir la imagen '{descripcion}' en el PDF. ({type(e).__name__})")
                 
                 finally:
                     # Borrar archivo temporal si existe
@@ -112,7 +125,7 @@ def generar_pdf(datos, imagenes):
                 
                 pdf.ln(5)
 
-    # 5. Firmas
+    # 6. Firmas
     pdf.ln(10)
     pdf.set_font("Arial", '', 10)
     pdf.cell(90, 10, "_______________________", ln=0, align='C')
@@ -120,8 +133,7 @@ def generar_pdf(datos, imagenes):
     pdf.cell(90, 5, "Firma del Técnico", ln=0, align='C')
     pdf.cell(90, 5, "Firma del Cliente", ln=1, align='C')
 
-
-    # Corrección final: devuelve los bytes para Streamlit
+    # **CRÍTICO PARA STREAMLIT**: devolver los bytes con dest='B' (Binary)
     return pdf.output(dest='B')
 
 # --- Interfaz del Formulario (Streamlit) ---
@@ -156,6 +168,7 @@ with st.form("formulario_reporte"):
 
 # --- Generación y Descarga ---
 if submitted:
+    # Validación básica de campos
     if not cliente or not equipo or not tecnico or not falla or not solucion:
         st.error("Por favor, complete los campos obligatorios: Cliente, Equipo, Técnico, Falla y Solución.")
     else:
@@ -170,7 +183,7 @@ if submitted:
             "costo": costo
         }
         
-        # Preparar imágenes
+        # Preparar imágenes. Los valores serán None si no se sube nada.
         imgs_para_pdf = {
             "Estado Inicial (Antes)": img_antes,
             "Resultado Final (Después)": img_despues
@@ -192,4 +205,4 @@ if submitted:
                 )
             except Exception as e:
                 # Si falla algo desconocido, mostramos el error general
-                st.error(f"Error al generar el PDF. Revise el log. Detalle: {type(e).__name__}")
+                st.error(f"Error CRÍTICO al generar el PDF. Detalle: {type(e).__name__}. Revise si tiene algún caracter extraño en los datos.")
