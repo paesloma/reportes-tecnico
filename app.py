@@ -9,13 +9,13 @@ from io import BytesIO
 st.set_page_config(page_title="Generador de Reportes Técnicos", layout="centered")
 
 # --- Lógica del PDF ---
-# Volvemos a Arial/Helvetica, que es la fuente más estable en entornos de nube,
-# manejando la codificación manualmente en los campos largos.
+# Usamos Helvetica (similar a Arial) y codificamos los textos a latin-1 para máxima estabilidad
+# en entornos de nube y soporte básico de acentos/ñ sin necesidad de fonttools.
 
 class PDF(FPDF):
     def __init__(self, orientation='P', unit='mm', format='A4'):
         super().__init__(orientation, unit, format)
-        self.font_family = "Helvetica" # Usamos Helvetica, que es idéntica a Arial pero a veces más estable.
+        self.font_family = "Helvetica" # La fuente más estable de FPDF
 
     def header(self):
         if os.path.exists("logo.png"):
@@ -38,6 +38,11 @@ def generar_pdf(datos, imagenes):
     pdf.add_page()
     pdf.set_font(pdf.font_family, size=12) 
 
+    # Función auxiliar para codificar texto de forma segura
+    def codificar_texto(texto):
+        # Codifica a latin-1 (para acentos/ñ) y reemplaza caracteres no soportados por '?'.
+        return texto.encode('latin-1', 'replace').decode('latin-1')
+
     # 1. Información del Cliente
     pdf.set_fill_color(230, 230, 230)
     pdf.cell(0, 10, "1. Información del Cliente y Equipo", 0, 1, 'L', fill=True)
@@ -47,8 +52,7 @@ def generar_pdf(datos, imagenes):
     pdf.set_font(pdf.font_family, 'B', 12)
     pdf.cell(40, 10, "Cliente:", 0, 0)
     pdf.set_font(pdf.font_family, '', 12)
-    # Codificamos a latin-1 para acentos/ñ en campos cortos (más estables)
-    pdf.cell(0, 10, datos['cliente'].encode('latin-1', 'replace').decode('latin-1'), 0, 1)
+    pdf.cell(0, 10, codificar_texto(datos['cliente']), 0, 1)
     
     pdf.set_font(pdf.font_family, 'B', 12)
     pdf.cell(40, 10, "Fecha:", 0, 0)
@@ -58,12 +62,12 @@ def generar_pdf(datos, imagenes):
     pdf.set_font(pdf.font_family, 'B', 12)
     pdf.cell(40, 10, "Dispositivo:", 0, 0)
     pdf.set_font(pdf.font_family, '', 12)
-    pdf.cell(0, 10, datos['equipo'].encode('latin-1', 'replace').decode('latin-1'), 0, 1)
+    pdf.cell(0, 10, codificar_texto(datos['equipo']), 0, 1)
 
     pdf.set_font(pdf.font_family, 'B', 12)
     pdf.cell(40, 10, "Técnico:", 0, 0)
     pdf.set_font(pdf.font_family, '', 12)
-    pdf.cell(0, 10, datos['tecnico'].encode('latin-1', 'replace').decode('latin-1'), 0, 1)
+    pdf.cell(0, 10, codificar_texto(datos['tecnico']), 0, 1)
     pdf.ln(5)
 
     # 2. Detalles Técnicos
@@ -74,18 +78,14 @@ def generar_pdf(datos, imagenes):
     pdf.set_font(pdf.font_family, 'B', 12)
     pdf.multi_cell(0, 5, "Falla Reportada:")
     pdf.set_font(pdf.font_family, '', 12)
-    # Codificación de campos largos para evitar FPDFException
-    falla_codificada = datos['falla'].encode('latin-1', 'replace').decode('latin-1')
-    pdf.multi_cell(0, 5, falla_codificada)
+    pdf.multi_cell(0, 5, codificar_texto(datos['falla']))
     pdf.ln(3)
 
     # Trabajo Realizado
     pdf.set_font(pdf.font_family, 'B', 12)
     pdf.multi_cell(0, 5, "Trabajo Realizado:")
     pdf.set_font(pdf.font_family, '', 12)
-    # Codificación de campos largos para evitar FPDFException
-    solucion_codificada = datos['solucion'].encode('latin-1', 'replace').decode('latin-1')
-    pdf.multi_cell(0, 5, solucion_codificada)
+    pdf.multi_cell(0, 5, codificar_texto(datos['solucion']))
     pdf.ln(5)
 
     # 3. Costo Total
@@ -103,7 +103,7 @@ def generar_pdf(datos, imagenes):
             temp_path = None
             if archivo_img is not None:
                 pdf.set_font(pdf.font_family, 'B', 12)
-                pdf.cell(0, 10, descripcion.encode('latin-1', 'replace').decode('latin-1'), 0, 1)
+                pdf.cell(0, 10, codificar_texto(descripcion), 0, 1)
                 
                 try:
                     archivo_img.seek(0)
@@ -118,7 +118,6 @@ def generar_pdf(datos, imagenes):
                 except Exception as e:
                     pdf.set_font(pdf.font_family, '', 10)
                     pdf.cell(0, 10, f"(Error al cargar imagen. Detalle: {type(e).__name__})", 0, 1)
-                    st.warning(f"Advertencia: No se pudo incluir la imagen '{descripcion}' en el PDF. ({type(e).__name__})")
                 
                 finally:
                     if temp_path and os.path.exists(temp_path):
@@ -200,5 +199,5 @@ if submitted:
                     mime="application/pdf"
                 )
             except Exception as e:
-                # Este error CRÍTICO es la última línea de defensa.
-                st.error(f"Error CRÍTICO al generar el PDF. Detalle: {type(e).__name__}. Si ve este error, probablemente el problema sea con caracteres especiales o el entorno de la nube. Intente no usar emojis o símbolos especiales.")
+                # Si falla incluso con esta codificación, es un problema del entorno.
+                st.error(f"Error CRÍTICO al generar el PDF. Detalle: {type(e).__name__}. Verifique sus datos y que el 'requirements.txt' solo tenga 'streamlit' y 'fpdf2'.")
