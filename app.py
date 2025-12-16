@@ -14,6 +14,9 @@ from reportlab.lib import colors
 # --- Configuración de la página ---
 st.set_page_config(page_title="🔧 Informe Técnico", layout="centered")
 
+# --- LISTA DE TÉCNICOS DISPONIBLES (NUEVA) ---
+LISTA_TECNICOS = ["Juan Diego Quezada", "Xavier Ramon", "Santiago Farez"]
+
 def generar_pdf(datos, imagenes_cargadas):
     # Usaremos BytesIO para escribir el PDF directamente en la memoria
     buffer = BytesIO()
@@ -34,7 +37,7 @@ def generar_pdf(datos, imagenes_cargadas):
     estilo_campo_bold = ParagraphStyle('FieldBold', parent=estilo_normal, fontName='Helvetica-Bold', fontSize=10, spaceAfter=0)
     estilo_campo_valor = ParagraphStyle('FieldValue', parent=estilo_normal, fontSize=10, spaceAfter=6)
     
-    # NUEVO ESTILO: para el nombre en la firma (centrado y sin espacio inferior)
+    # ESTILO para el nombre en la firma (centrado y sin espacio inferior)
     estilo_firma_nombre = ParagraphStyle('FirmaNombre', parent=estilo_normal, alignment=1, fontSize=10, spaceAfter=0)
 
 
@@ -123,7 +126,6 @@ def generar_pdf(datos, imagenes_cargadas):
     # Usamos una tabla para alinear las firmas
     nombre_tecnico = datos['tecnico']
     
-    # CAMBIO CLAVE: Nueva fila para el nombre del técnico
     data_firmas = [
         # Fila 1: Nombre del técnico (se deja vacío el del cliente por ahora)
         [Paragraph(nombre_tecnico, estilo_firma_nombre), Paragraph("", estilo_firma_nombre)],
@@ -137,7 +139,6 @@ def generar_pdf(datos, imagenes_cargadas):
         ('ALIGN', (0,0), (-1,-1), 'CENTER'),
         ('VALIGN', (0,0), (-1,-1), 'TOP'),
         ('FONTNAME', (0,0), (-1,-1), 'Helvetica'),
-        # Ajustes de padding para que el nombre quede justo encima de la línea
         ('BOTTOMPADDING', (0,0), (-1,0), 0),
         ('TOPPADDING', (0,1), (-1,1), 0),
     ]))
@@ -155,8 +156,6 @@ st.title("🔧 Informe Técnico")
 st.markdown("Genera un informe detallado del servicio realizado, incluyendo evidencias fotográficas.")
 st.markdown("---")
 
-# Estilo mejorado: usar pestañas y columnas para una mejor organización
-
 with st.form("formulario_reporte"):
     tab1, tab2 = st.tabs(["📋 Detalles Generales", "📸 Evidencia"])
 
@@ -170,7 +169,14 @@ with st.form("formulario_reporte"):
         
         with col2:
             fecha = st.date_input("Fecha del Servicio", key="fecha", value=date.today(), help="Día en que se realizó el servicio.")
-            tecnico = st.text_input("Nombre del Técnico", key="tecnico", help="Persona que realiza el diagnóstico y reparación.")
+            
+            # CAMBIO CLAVE AQUÍ: Usamos st.selectbox para la lista de técnicos
+            tecnico = st.selectbox(
+                "Nombre del Técnico", 
+                options=LISTA_TECNICOS,
+                key="tecnico", 
+                help="Seleccione el técnico que realiza el servicio."
+            )
 
         st.subheader("Diagnóstico y Solución ✅")
         falla = st.text_area("Falla Reportada / Problema", key="falla", height=100, help="Descripción detallada del problema inicial.")
@@ -180,7 +186,6 @@ with st.form("formulario_reporte"):
         st.subheader("Evidencia Fotográfica 🖼️")
         st.info("Sube todas las fotos relevantes. Se incluirán en orden en el informe.")
         
-        # Carga de múltiples archivos
         imagenes_cargadas = st.file_uploader(
             "Cargar Fotos (JPEG, PNG)", 
             type=['jpg', 'png', 'jpeg'],
@@ -205,7 +210,6 @@ if submitted:
             "solucion": solucion,
         }
         
-        # Pasamos la lista de archivos al generador
         with st.spinner('⚙️ Generando Informe PDF...'):
             try:
                 pdf_bytes = generar_pdf(datos_formulario, imagenes_cargadas)
