@@ -125,3 +125,41 @@ st.markdown("---")
 
 # Formulario (Editable)
 with st.form("main_form"):
+    tipo = st.selectbox("Tipo de Reporte", options=OPCIONES_REPORTE)
+    
+    col1, col2 = st.columns(2)
+    with col1:
+        f_cliente = st.text_input("Cliente", value=c_def)
+        f_prod = st.text_input("Producto", value=p_def)
+        f_serie = st.text_input("Serie/Artículo", value=s_def)
+    with col2:
+        f_fac = st.text_input("Factura", value=f_def)
+        f_fec_fac = st.date_input("Fecha Factura", value=ff_def)
+        f_tecnico = st.selectbox("Técnico", options=LISTA_TECNICOS)
+    
+    f_falla = st.text_area("Falla Reportada")
+    f_solucion = st.text_area("Trabajo Realizado")
+    imgs = st.file_uploader("Evidencia Fotográfica", type=['jpg', 'png', 'jpeg'], accept_multiple_files=True)
+
+    submit = st.form_submit_button("💾 GENERAR INFORME PDF")
+
+if submit:
+    if not (f_cliente and f_falla and f_solucion):
+        st.error("Por favor complete los campos obligatorios.")
+    else:
+        pdf = generar_pdf({
+            "tipo_reporte": tipo, "orden": orden_id, "cliente": f_cliente,
+            "factura": f_fac, "fecha_factura": f_fec_fac, "producto": f_prod,
+            "serie": f_serie, "tecnico": f_tecnico, "falla": f_falla,
+            "solucion": f_solucion, "fecha_hoy": date.today()
+        }, imgs)
+        st.download_button("📥 Descargar PDF", data=pdf, file_name=f"Reporte_{orden_id}.pdf")
+
+# --- 6. TABLA DE TÉCNICOS (REGLA: SIEMPRE MOSTRAR) ---
+st.markdown("---")
+st.subheader("🧑‍🔧 Técnicos a Nivel Nacional")
+df_tecnicos = pd.DataFrame({
+    "Ciudad": ["Guayaquil", "Guayaquil", "Quito", "Quito", "Cuenca", "Cuenca", "Cuenca", "Cuenca"],
+    "Técnicos": ["Carlos Jama", "Manuel Vera", "Javier Quiguango", "Wilson Quiguango", "Juan Diego Quezada", "Juan Farez", "Santiago Farez", "Xavier Ramón"]
+})
+st.table(df_tecnicos)
