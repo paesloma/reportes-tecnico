@@ -15,7 +15,7 @@ from reportlab.lib import colors
 st.set_page_config(page_title="🔧 Informe Técnico", layout="centered")
 
 # --- LISTA DE TÉCNICOS CON PREFIJO 'Tec.' ---
-LISTA_TECNICOS = ["Tec. Juan Diego Quezada", "Tec. Xavier Ramon", "Tec. Santiago Farez"]
+LISTA_TECNICOS = ["Tec. Juan Diego Quezada", "Tec. Xavier Ramon", "Tec. Santiago Farez","Tec.Wilson Quiguango","Tec.Javier Quiguango"]
 
 def generar_pdf(datos, imagenes_cargadas):
     buffer = BytesIO()
@@ -161,3 +161,4 @@ if submitted:
             st.download_button(label="⬇️ Descargar PDF", data=pdf_bytes, file_name=f"Informe_{cliente}.pdf", mime="application/pdf")
         except Exception as e:
             st.error(f"Error: {e}")
+
