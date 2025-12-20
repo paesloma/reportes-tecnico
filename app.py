@@ -24,7 +24,6 @@ def cargar_datos_servicios():
             try:
                 df = pd.read_csv("servicios.csv", dtype=str, encoding=encoding, sep=None, engine='python')
                 df.columns = df.columns.str.strip()
-                # Normalización de encabezados según la imagen enviada
                 nombres_clave = {'Serie/Artículo': 'Serie', 'Fec. Fac. Min': 'Fec_Fac_Min', 'Fac. Min': 'Fac_Min'}
                 df = df.rename(columns=nombres_clave)
                 return df
@@ -43,7 +42,7 @@ def mostrar_grafico():
     ax.set_title("Progreso de Gestión de Órdenes (%)")
     st.pyplot(fig)
 
-# --- 4. FUNCIÓN GENERAR PDF ---
+# --- 4. FUNCIÓN GENERAR PDF (SIN TEXTO ROJO) ---
 def generar_pdf(datos, imagenes_cargadas):
     buffer = BytesIO()
     doc = SimpleDocTemplate(buffer, pagesize=letter, topMargin=0.4*inch, bottomMargin=0.4*inch)
@@ -57,8 +56,8 @@ def generar_pdf(datos, imagenes_cargadas):
 
     story = []
     story.append(Paragraph("INFORME TÉCNICO DE SERVICIO", est_titulo))
-    story.append(Paragraph(f"TIPO: {datos['tipo_reporte']}", ParagraphStyle('TR', alignment=1, textColor=colors.red, fontName='Helvetica-Bold')))
-    story.append(Spacer(1, 10))
+    # SE HA ELIMINADO LA LÍNEA DEL TIPO DE REPORTE EN ROJO AQUÍ
+    story.append(Spacer(1, 15))
     
     # Tabla de Datos Generales
     info = [
@@ -103,13 +102,13 @@ def generar_pdf(datos, imagenes_cargadas):
     return buffer.read()
 
 # --- 5. INTERFAZ ---
-st.title("🔧 Generador de Reportes Técnicos")
+st.title("🔧 Gestión de Servicio Técnico")
 mostrar_grafico()
 
 # Búsqueda de Orden
 with st.container():
-    st.subheader("1. Buscar Orden")
-    orden_id = st.text_input("Número de Orden")
+    st.subheader("1. Localizar Orden")
+    orden_id = st.text_input("Ingrese número de Orden")
     c_v, s_v, p_v, f_v, ff_v = "", "", "", "", date.today()
     if orden_id and not df_db.empty:
         res = df_db[df_db['Orden'] == orden_id]
@@ -118,13 +117,13 @@ with st.container():
             c_v, s_v, p_v, f_v = row.get('Cliente',''), row.get('Serie',''), row.get('Producto',''), row.get('Fac_Min','')
             try: ff_v = pd.to_datetime(str(row.get('Fec_Fac_Min',''))).date()
             except: pass
-            st.success("✅ Datos cargados.")
+            st.success("✅ Datos cargados correctamente.")
 
 st.markdown("---")
 
 # Formulario
 with st.form("form_tecnico"):
-    tipo_rep = st.selectbox("Tipo de Reporte", options=OPCIONES_REPORTE)
+    tipo_rep = st.selectbox("Tipo de Reporte (Define la conclusión automática)", options=OPCIONES_REPORTE)
     
     col1, col2 = st.columns(2)
     with col1:
@@ -134,20 +133,16 @@ with st.form("form_tecnico"):
     with col2:
         f_fac = st.text_input("Factura", value=f_v)
         f_fec_fac = st.date_input("Fecha Factura", value=ff_v)
-        f_tecnico = st.selectbox("Técnico", options=LISTA_TECNICOS)
+        f_tecnico = st.selectbox("Técnico Asignado", options=LISTA_TECNICOS)
     
-    # Secciones solicitadas
     f_rev_fisica = st.text_area("1. Revisión Física")
     f_ingreso_tec = st.text_area("2. Ingresa a servicio técnico")
     
-    # Texto automático sección 3
     t_electro = "Se procede a revisar el sistema de alimentación de energía y sus líneas de conexión.\nSe procede a revisar el sistema electrónico del equipo."
     f_rev_electro = st.text_area("3. Revisión electro-electrónica-mecanica", value=t_electro)
     
-    # Texto automático sección 4
     f_obs = st.text_area("4. Observaciones", value="Luego de la revisión del artículo se observa lo siguiente: ")
 
-    # Lógica automática sección 5
     concl_map = {
         "FUERA DE GARANTIA": "Con base en estos hallazgos, lamentamos indicarle que el daño identificado no es atribuible a defectos de fabricación o materiales, sino al uso indebido del equipo, lo cual invalida la cobertura de garantía.",
         "INFORME TECNICO": "Con base en estos hallazgos, lamentamos indicarle que el daño identificado no es atribuible a defectos de fabricación o materiales",
@@ -155,13 +150,12 @@ with st.form("form_tecnico"):
     }
     f_conclusiones = st.text_area("5. Conclusiones", value=concl_map[tipo_rep])
     
-    f_fotos = st.file_uploader("Subir Imágenes", type=['jpg','png','jpeg'], accept_multiple_files=True)
+    f_fotos = st.file_uploader("Evidencia Fotográfica", type=['jpg','png','jpeg'], accept_multiple_files=True)
     
-    enviar = st.form_submit_button("💾 PREPARAR REPORTE")
+    preparar = st.form_submit_button("💾 GENERAR REPORTE")
 
-# --- SOLUCIÓN AL ERROR DE DOWNLOAD_BUTTON ---
-# Colocamos el botón de descarga FUERA del bloque 'with st.form'
-if enviar:
+# Botón de descarga fuera del formulario
+if preparar:
     if f_cliente and f_conclusiones:
         pdf_data = generar_pdf({
             "tipo_reporte": tipo_rep, "orden": orden_id, "cliente": f_cliente,
@@ -171,16 +165,15 @@ if enviar:
             "rev_electro": f_rev_electro, "observaciones": f_obs, "conclusiones": f_conclusiones
         }, f_fotos)
         
-        st.success("✅ Reporte listo para descargar")
-        st.download_button("📥 DESCARGAR INFORME PDF", data=pdf_data, file_name=f"Reporte_{orden_id}.pdf")
+        st.success("✅ El informe ha sido generado.")
+        st.download_button("📥 DESCARGAR INFORME PDF", data=pdf_data, file_name=f"Informe_Tecnico_{orden_id}.pdf")
     else:
-        st.error("Por favor complete los datos obligatorios.")
+        st.error("Complete los campos requeridos para continuar.")
 
-# --- 6. TABLA TÉCNICA (REGLA: SIEMPRE MOSTRAR) ---
+# --- 6. TABLA (REGLA: SIEMPRE MOSTRAR) ---
 st.markdown("---")
 st.subheader("🧑‍🔧 Técnicos a Nivel Nacional")
-df_tecnicos = pd.DataFrame({
+st.table(pd.DataFrame({
     "Ciudad": ["Guayaquil", "Guayaquil", "Quito", "Quito", "Cuenca", "Cuenca", "Cuenca", "Cuenca"],
     "Técnicos": ["Carlos Jama", "Manuel Vera", "Javier Quiguango", "Wilson Quiguango", "Juan Diego Quezada", "Juan Farez", "Santiago Farez", "Xavier Ramón"]
-})
-st.table(df_tecnicos)
+}))
