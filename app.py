@@ -8,14 +8,14 @@ import os
 # Importaciones de ReportLab para el PDF
 from reportlab.lib.pagesizes import letter
 from reportlab.lib.styles import ParagraphStyle
-from reportlab.platypus import SimpleDocTemplate, Paragraph, Spacer, Image, Table, TableStyle, HRFlowable
+from reportlab.platypus import SimpleDocTemplate, Paragraph, Spacer, Image, Table, TableStyle
 from reportlab.lib.units import inch
 from reportlab.lib import colors
 
 # --- 1. CONFIGURACIÓN ---
 st.set_page_config(page_title="Generador de Reportes", page_icon="🔧", layout="centered")
 
-# --- 2. CARGA DE DATOS (PROTEGIDA) ---
+# --- 2. CARGA DE DATOS ---
 @st.cache_data
 def cargar_datos_servicios():
     if os.path.exists("servicios.csv"):
@@ -50,17 +50,18 @@ def generar_pdf(datos, lista_imagenes_procesadas):
     buffer = BytesIO()
     doc = SimpleDocTemplate(buffer, pagesize=letter, topMargin=0.4*inch, bottomMargin=0.4*inch, leftMargin=0.5*inch, rightMargin=0.5*inch)
     
-    try: color_principal = colors.HexColor("#003366")
-    except: color_principal = colors.navy
+    # NUEVO COLOR DE RELLENO SOLICITADO
+    color_azul_institucional = colors.HexColor("#0056b3")
 
-    est_titulo = ParagraphStyle('T', fontSize=16, alignment=1, fontName='Helvetica-Bold', textColor=color_principal)
+    est_titulo = ParagraphStyle('T', fontSize=16, alignment=1, fontName='Helvetica-Bold', textColor=color_azul_institucional)
     est_sec = ParagraphStyle('S', fontSize=10, fontName='Helvetica-Bold', textColor=colors.white, 
-                            backColor=color_principal, borderPadding=1, spaceBefore=8)
+                            backColor=color_azul_institucional, borderPadding=2, spaceBefore=8)
     est_txt = ParagraphStyle('TXT', fontSize=9, fontName='Helvetica', leading=11)
     est_firma = ParagraphStyle('F', fontSize=10, fontName='Helvetica-Bold', alignment=1)
 
     story = []
 
+    # LOGO
     if os.path.exists("logo.png"):
         img_logo = Image("logo.png", width=1.4*inch, height=0.55*inch)
         img_logo.hAlign = 'LEFT'
@@ -69,7 +70,7 @@ def generar_pdf(datos, lista_imagenes_procesadas):
     story.append(Paragraph("INFORME TÉCNICO DE SERVICIO", est_titulo))
     story.append(Spacer(1, 15))
     
-    # Lógica Factura: Si es "0", colocar "STOCK"
+    # Ajuste de Factura/Stock
     factura_texto = "STOCK" if str(datos['factura']).strip() == "0" else datos['factura']
 
     info = [
@@ -107,8 +108,8 @@ def generar_pdf(datos, lista_imagenes_procesadas):
         t_fotos.setStyle(TableStyle([('VALIGN', (0,0), (-1,-1), 'MIDDLE'), ('BOTTOMPADDING', (0,0), (-1,-1), 12)]))
         story.append(t_fotos)
 
-    story.append(Spacer(1, 50))
-    story.append(HRFlowable(width=2.5*inch, thickness=1, color=colors.black, hAlign='CENTER'))
+    # SECCIÓN DE FIRMA (SIN RAYA SUPERIOR)
+    story.append(Spacer(1, 60))
     story.append(Paragraph("Revisado por:", est_firma))
     story.append(Paragraph(datos['tecnico'], est_firma))
 
@@ -144,7 +145,6 @@ with col1:
     f_serie = st.text_input("Serie/Artículo", value=s_v)
 with col2:
     f_tecnico = st.selectbox("Técnico Asignado", options=LISTA_TECNICOS)
-    # Mostramos "0" si es stock, la función generar_pdf se encarga del texto final
     f_fac = st.text_input("Factura", value=f_v)
     f_fec_fac = st.date_input("Fecha Factura", value=ff_v)
 
