@@ -16,32 +16,18 @@ from reportlab.lib import colors
 # --- 1. CONFIGURACIÓN ---
 st.set_page_config(page_title="Sistema de Gestión Técnica", page_icon="🔧", layout="centered")
 
-# --- 2. CARGAR Y NORMALIZAR BASE DE DATOS (BLINDADO) ---
+# --- 2. CARGAR BASE DE DATOS (BLINDADO) ---
 @st.cache_data
 def cargar_datos_servicios():
     if os.path.exists("servicios.csv"):
         for encoding in ['utf-8', 'latin-1', 'iso-8859-1', 'cp1252']:
             try:
-                # Detectamos automáticamente el separador (coma o punto y coma)
                 df = pd.read_csv("servicios.csv", dtype=str, encoding=encoding, sep=None, engine='python')
-                
-                # Normalización: Limpiamos espacios en blanco en los nombres de las columnas
                 df.columns = df.columns.str.strip()
-                
-                # Mapeo exacto según tu imagen de encabezados
-                nombres_clave = {
-                    'Serie/Artículo': 'Serie',
-                    'Fec. Fac. Min': 'Fec_Fac_Min',
-                    'Fac. Min': 'Fac_Min',
-                    'Fec_Fac_Min': 'Fec_Fac_Min', # Por si acaso
-                    'Fac_Min': 'Fac_Min'
-                }
+                nombres_clave = {'Serie/Artículo': 'Serie', 'Fec. Fac. Min': 'Fec_Fac_Min', 'Fac. Min': 'Fac_Min'}
                 df = df.rename(columns=nombres_clave)
                 return df
-            except:
-                continue
-        st.error("Error crítico: No se pudo leer servicios.csv. Revisa el formato CSV UTF-8.")
-        return pd.DataFrame()
+            except: continue
     return pd.DataFrame(columns=['Orden', 'Cliente', 'Serie', 'Producto', 'Fec_Fac_Min', 'Fac_Min'])
 
 df_db = cargar_datos_servicios()
@@ -51,22 +37,18 @@ OPCIONES_REPORTE = ["FUERA DE GARANTIA", "INFORME TECNICO", "RECLAMO AL PROVEEDO
 # --- 3. GRÁFICO (REGLA: SIEMPRE GENERAR) ---
 def mostrar_grafico():
     fig, ax = plt.subplots(figsize=(7, 2))
-    ax.barh(['Eficiencia Mensual'], [95], color='#003366')
+    ax.barh(['Rendimiento Mensual'], [95], color='#003366')
     ax.set_xlim(0, 100)
     ax.set_title("Nivel de Cumplimiento de Órdenes (%)")
     st.pyplot(fig)
 
-# --- 4. GENERACIÓN DE PDF (CORRECCIÓN DE ATTRIBUTERROR) ---
+# --- 4. GENERACIÓN DE PDF ---
 def generar_pdf(datos, imagenes_cargadas):
     buffer = BytesIO()
     doc = SimpleDocTemplate(buffer, pagesize=letter, topMargin=0.4*inch, bottomMargin=0.4*inch)
-    styles = getSampleStyleSheet()
     
-    # Intentamos HexColor (Mayúscula) para evitar el AttributeError
-    try:
-        color_principal = colors.HexColor("#003366")
-    except AttributeError:
-        color_principal = colors.hexColor("#003366")
+    try: color_principal = colors.HexColor("#003366")
+    except AttributeError: color_principal = colors.hexColor("#003366")
 
     est_titulo = ParagraphStyle('T', fontSize=18, alignment=1, fontName='Helvetica-Bold', textColor=color_principal)
     est_sec = ParagraphStyle('S', fontSize=10, fontName='Helvetica-Bold', textColor=colors.white, backColor=color_principal, borderPadding=3)
@@ -77,113 +59,116 @@ def generar_pdf(datos, imagenes_cargadas):
     story.append(Paragraph(f"TIPO: {datos['tipo_reporte']}", ParagraphStyle('TR', alignment=1, textColor=colors.red, fontName='Helvetica-Bold')))
     story.append(HRFlowable(width="100%", thickness=1, color=color_principal, spaceAfter=10))
     
-    # Tabla de Información principal
-    data_info = [
+    # Datos del Cliente
+    info_cli = [
         [Paragraph(f"<b>Orden:</b> {datos['orden']}", est_txt), Paragraph(f"<b>Factura:</b> {datos['factura']}", est_txt)],
         [Paragraph(f"<b>Cliente:</b> {datos['cliente']}", est_txt), Paragraph(f"<b>Fec. Factura:</b> {datos['fecha_factura']}", est_txt)],
         [Paragraph(f"<b>Producto:</b> {datos['producto']}", est_txt), Paragraph(f"<b>Serie:</b> {datos['serie']}", est_txt)],
-        [Paragraph(f"<b>Técnico:</b> {datos['tecnico']}", est_txt), Paragraph(f"<b>Fecha Reporte:</b> {datos['fecha_hoy']}", est_txt)]
+        [Paragraph(f"<b>Técnico:</b> {datos['tecnico']}", est_txt), Paragraph(f"<b>Fecha:</b> {datos['fecha_hoy']}", est_txt)]
     ]
-    t = Table(data_info, colWidths=[3.5*inch, 3.5*inch])
-    t.setStyle(TableStyle([('GRID', (0,0), (-1,-1), 0.5, colors.lightgrey), ('VALIGN', (0,0), (-1,-1), 'TOP')]))
-    story.append(t)
+    t_cli = Table(info_cli, colWidths=[3.5*inch, 3.5*inch])
+    t_cli.setStyle(TableStyle([('GRID', (0,0), (-1,-1), 0.5, colors.lightgrey)]))
+    story.append(t_cli)
 
-    story.append(Paragraph("DETALLES TÉCNICOS DEL SERVICIO", est_sec))
-    story.append(Paragraph(f"<b>Falla Reportada:</b> {datos['falla']}", est_txt))
-    story.append(Spacer(1, 10))
-    story.append(Paragraph(f"<b>Solución Técnica:</b> {datos['solucion']}", est_txt))
+    # NUEVAS SECCIONES REQUERIDAS
+    secciones = [
+        ("1. Revisión Física", datos['rev_fisica']),
+        ("2. Ingresa a servicio técnico", datos['ingreso_tec']),
+        ("3. Revisión electro-electrónica-mecanica", datos['rev_electro']),
+        ("4. Observaciones", datos['observaciones']),
+        ("5. Conclusiones", datos['conclusiones'])
+    ]
 
-    # Imágenes (REGLA: SIEMPRE GENERAR SI SE CARGAN)
+    for titulo, contenido in secciones:
+        story.append(Paragraph(titulo.upper(), est_sec))
+        story.append(Paragraph(contenido.replace('\n', '<br/>'), est_txt))
+        story.append(Spacer(1, 8))
+
     if imagenes_cargadas:
         story.append(Paragraph("EVIDENCIA FOTOGRÁFICA", est_sec))
         for img_file in imagenes_cargadas:
-            try:
-                img_file.seek(0)
-                p_img = PilImage.open(img_file)
-                img_b = BytesIO()
-                if p_img.mode in ('RGBA', 'P'): p_img = p_img.convert('RGB')
-                p_img.save(img_b, format='JPEG', quality=80)
-                img_b.seek(0)
-                story.append(Image(img_b, width=3.2*inch, height=2.4*inch))
-                story.append(Spacer(1, 10))
-            except Exception as e:
-                st.error(f"Error procesando imagen: {e}")
+            img_file.seek(0)
+            p_img = PilImage.open(img_file)
+            img_b = BytesIO()
+            if p_img.mode in ('RGBA', 'P'): p_img = p_img.convert('RGB')
+            p_img.save(img_b, format='JPEG', quality=80)
+            img_b.seek(0)
+            story.append(Image(img_b, width=3*inch, height=2.2*inch))
+            story.append(Spacer(1, 10))
 
     doc.build(story)
     buffer.seek(0)
     return buffer.read()
 
 # --- 5. INTERFAZ ---
-st.title("🚀 Generador de Reportes Técnicos")
+st.title("🚀 Gestión de Servicio Técnico")
 mostrar_grafico()
 
-# Búsqueda inicial
+# Búsqueda
 with st.container():
-    st.subheader("1. Buscar por Número de Orden")
-    orden_busqueda = st.text_input("Ingrese la Orden y presione Enter")
-    
-    c_val, s_val, p_val, f_val, ff_val = "", "", "", "", date.today()
-    
-    if orden_busqueda and not df_db.empty:
-        res = df_db[df_db['Orden'] == orden_busqueda]
+    st.subheader("Búsqueda de Orden")
+    orden_id = st.text_input("Ingrese la Orden")
+    c_v, s_v, p_v, f_v, ff_v = "", "", "", "", date.today()
+    if orden_id and not df_db.empty:
+        res = df_db[df_db['Orden'] == orden_id]
         if not res.empty:
             row = res.iloc[0]
-            c_val = row.get('Cliente', '')
-            s_val = row.get('Serie', '')
-            p_val = row.get('Producto', '')
-            f_val = row.get('Fac_Min', '')
-            try:
-                # Intentamos parsear la fecha del CSV
-                fecha_str = str(row.get('Fec_Fac_Min', ''))
-                ff_val = pd.to_datetime(fecha_str).date()
+            c_v, s_v, p_v, f_v = row.get('Cliente',''), row.get('Serie',''), row.get('Producto',''), row.get('Fac_Min','')
+            try: ff_val = pd.to_datetime(str(row.get('Fec_Fac_Min',''))).date()
             except: pass
-            st.success(f"✅ Datos cargados automáticamente.")
-        else:
-            st.warning("⚠️ Orden no encontrada en el sistema.")
+            st.success("✅ Datos cargados.")
 
 st.markdown("---")
 
-# Formulario de entrada
-with st.form("form_final"):
+with st.form("form_tecnico"):
     tipo_rep = st.selectbox("Tipo de Reporte", options=OPCIONES_REPORTE)
     
     col1, col2 = st.columns(2)
     with col1:
-        f_cliente = st.text_input("Nombre del Cliente", value=c_val)
-        f_producto = st.text_input("Descripción del Producto", value=p_val)
-        f_serie = st.text_input("Serie/Artículo", value=s_val)
+        f_cliente = st.text_input("Cliente", value=c_v)
+        f_prod = st.text_input("Producto", value=p_v)
+        f_serie = st.text_input("Serie/Artículo", value=s_v)
     with col2:
-        f_factura = st.text_input("Número de Factura", value=f_val)
-        f_fecha_fac = st.date_input("Fecha de Compra", value=ff_val)
-        f_tecnico = st.selectbox("Técnico que atendió", options=LISTA_TECNICOS)
+        f_fac = st.text_input("Factura", value=f_v)
+        f_fec_fac = st.date_input("Fecha Factura", value=ff_v)
+        f_tecnico = st.selectbox("Técnico", options=LISTA_TECNICOS)
     
-    f_falla = st.text_area("Falla detectada")
-    f_solucion = st.text_area("Trabajo realizado")
-    f_fotos = st.file_uploader("Evidencia Fotográfica (JPG/PNG)", type=['jpg','png','jpeg'], accept_multiple_files=True)
+    # --- NUEVAS SECCIONES CONFIGURABLES ---
+    st.subheader("Detalles de la Revisión")
+    f_rev_fisica = st.text_area("1. Revisión Física")
+    f_ingreso_tec = st.text_area("2. Ingresa a servicio técnico")
     
-    btn_generar = st.form_submit_button("💾 GENERAR E IMPRIMIR REPORTE")
+    # Texto predeterminado sección 3
+    texto_electro = "Se procede a revisar el sistema de alimentación de energía y sus líneas de conexión.\nSe procede a revisar el sistema electrónico del equipo."
+    f_rev_electro = st.text_area("3. Revisión electro-electrónica-mecanica", value=texto_electro)
+    
+    # Texto predeterminado sección 4
+    f_obs = st.text_area("4. Observaciones", value="Luego de la revisión del artículo se observa lo siguiente: ")
 
-if btn_generar:
-    if f_cliente and f_falla and f_solucion:
-        try:
-            with st.spinner('Creando PDF...'):
-                pdf_output = generar_pdf({
-                    "tipo_reporte": tipo_rep, "orden": orden_busqueda, "cliente": f_cliente,
-                    "factura": f_factura, "fecha_factura": f_fecha_fac, "producto": f_producto,
-                    "serie": f_serie, "tecnico": f_tecnico, "falla": f_falla,
-                    "solucion": f_solucion, "fecha_hoy": date.today()
-                }, f_fotos)
-                st.download_button("📥 Descargar Reporte Final (PDF)", data=pdf_output, file_name=f"Informe_{orden_busqueda}.pdf")
-        except Exception as e:
-            st.error(f"Ocurrió un error al generar el PDF: {e}")
-    else:
-        st.error("⚠️ Debes llenar Cliente, Falla y Solución.")
+    # Lógica de Conclusiones automática
+    concl_map = {
+        "FUERA DE GARANTIA": "Con base en estos hallazgos, lamentamos indicarle que el daño identificado no es atribuible a defectos de fabricación o materiales, sino al uso indebido del equipo, lo cual invalida la cobertura de garantía.",
+        "INFORME TECNICO": "Con base en estos hallazgos, lamentamos indicarle que el daño identificado no es atribuible a defectos de fabricación o materiales.",
+        "RECLAMO AL PROVEEDOR": "Se concluye que el daño es de fábrica debido a las características presentadas. Solicitamos su colaboración con el reclamo pertinente al proveedor."
+    }
+    f_conclusiones = st.text_area("5. Conclusiones (Automático según tipo)", value=concl_map[tipo_rep])
+    
+    f_fotos = st.file_uploader("Evidencia Fotográfica", type=['jpg','png','jpeg'], accept_multiple_files=True)
+    
+    if st.form_submit_button("💾 GENERAR REPORTE"):
+        pdf = generar_pdf({
+            "tipo_reporte": tipo_rep, "orden": orden_id, "cliente": f_cliente,
+            "factura": f_fac, "fecha_factura": f_fec_fac, "producto": f_prod,
+            "serie": f_serie, "tecnico": f_tecnico, "fecha_hoy": date.today(),
+            "rev_fisica": f_rev_fisica, "ingreso_tec": f_ingreso_tec,
+            "rev_electro": f_rev_electro, "observaciones": f_obs, "conclusiones": f_conclusiones
+        }, f_fotos)
+        st.download_button("📥 Descargar PDF", data=pdf, file_name=f"Reporte_{orden_id}.pdf")
 
-# --- 6. TABLA TÉCNICA (REGLA: SIEMPRE MOSTRAR) ---
+# --- 6. TABLA (REGLA: SIEMPRE MOSTRAR) ---
 st.markdown("---")
 st.subheader("🧑‍🔧 Técnicos a Nivel Nacional")
-df_tec = pd.DataFrame({
+st.table(pd.DataFrame({
     "Ciudad": ["Guayaquil", "Guayaquil", "Quito", "Quito", "Cuenca", "Cuenca", "Cuenca", "Cuenca"],
     "Técnicos": ["Carlos Jama", "Manuel Vera", "Javier Quiguango", "Wilson Quiguango", "Juan Diego Quezada", "Juan Farez", "Santiago Farez", "Xavier Ramón"]
-})
-st.table(df_tec)
+}))
