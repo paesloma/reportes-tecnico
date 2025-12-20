@@ -8,14 +8,14 @@ import os
 # Importaciones de ReportLab para el PDF
 from reportlab.lib.pagesizes import letter
 from reportlab.lib.styles import ParagraphStyle
-from reportlab.platypus import SimpleDocTemplate, Paragraph, Spacer, Image, Table, TableStyle
+from reportlab.platypus import SimpleDocTemplate, Paragraph, Spacer, Image, Table, TableStyle, HRFlowable
 from reportlab.lib.units import inch
 from reportlab.lib import colors
 
 # --- 1. CONFIGURACIÓN ---
 st.set_page_config(page_title="Generador de Reportes", page_icon="🔧", layout="centered")
 
-# --- 2. CARGA DE DATOS (BLINDADA) ---
+# --- 2. CARGA DE DATOS ---
 @st.cache_data
 def cargar_datos_servicios():
     if os.path.exists("servicios.csv"):
@@ -38,29 +38,38 @@ def agregar_marca_agua(canvas, doc):
     watermark_file = "watermark.png"
     if os.path.exists(watermark_file):
         canvas.saveState()
-        canvas.setFillAlpha(0.15)
+        canvas.setFillAlpha(0.12)
         page_width, page_height = canvas._pagesize
         canvas.drawImage(watermark_file, 0, 0, width=page_width, height=page_height, 
                          mask='auto', preserveAspectRatio=True, anchor='c')
         canvas.restoreState()
 
-# --- 4. FUNCIÓN GENERAR PDF (MODIFICADA PARA FOTOS CON DESCRIPCIÓN) ---
-def generar_pdf(datos, lista_fotos_procesadas):
+# --- 4. FUNCIÓN GENERAR PDF ---
+def generar_pdf(datos, lista_imagenes_procesadas):
     buffer = BytesIO()
-    doc = SimpleDocTemplate(buffer, pagesize=letter, topMargin=0.5*inch, bottomMargin=0.4*inch, leftMargin=0.5*inch, rightMargin=0.5*inch)
+    doc = SimpleDocTemplate(buffer, pagesize=letter, topMargin=0.4*inch, bottomMargin=0.4*inch, leftMargin=0.5*inch, rightMargin=0.5*inch)
     
     try: color_principal = colors.HexColor("#003366")
     except AttributeError: color_principal = colors.hexColor("#003366")
 
-    est_titulo = ParagraphStyle('T', fontSize=16, alignment=1, fontName='Helvetica-Bold', textColor=color_principal, spaceAfter=20)
-    est_sec = ParagraphStyle('S', fontSize=10, fontName='Helvetica-Bold', textColor=colors.white, backColor=color_principal, borderPadding=3, spaceBefore=10)
+    est_titulo = ParagraphStyle('T', fontSize=16, alignment=1, fontName='Helvetica-Bold', textColor=color_principal)
+    est_sec = ParagraphStyle('S', fontSize=10, fontName='Helvetica-Bold', textColor=colors.white, backColor=color_principal, borderPadding=3, spaceBefore=8)
     est_txt = ParagraphStyle('TXT', fontSize=9, fontName='Helvetica', leading=11)
-    est_desc_foto = ParagraphStyle('DF', fontSize=9, fontName='Helvetica-Oblique', leading=11)
+    est_firma = ParagraphStyle('F', fontSize=10, fontName='Helvetica-Bold', alignment=1)
 
     story = []
-    story.append(Paragraph("INFORME TÉCNICO DE SERVICIO", est_titulo))
+
+    # --- CABECERA: LOGO E IZQUIERDA ---
+    logo_path = "logo.png"
+    if os.path.exists(logo_path):
+        img_logo = Image(logo_path, width=1.5*inch, height=0.6*inch)
+        img_logo.hAlign = 'LEFT'
+        story.append(img_logo)
     
-    # Tabla de Datos
+    story.append(Paragraph("INFORME TÉCNICO DE SERVICIO", est_titulo))
+    story.append(Spacer(1, 15))
+    
+    # Tabla de Datos del Cliente
     info = [
         [Paragraph(f"<b>Orden:</b> {datos['orden']}", est_txt), Paragraph(f"<b>Factura:</b> {datos['factura']}", est_txt)],
         [Paragraph(f"<b>Cliente:</b> {datos['cliente']}", est_txt), Paragraph(f"<b>Fec. Factura:</b> {datos['fecha_factura']}", est_txt)],
@@ -70,9 +79,8 @@ def generar_pdf(datos, lista_fotos_procesadas):
     t = Table(info, colWidths=[3.7*inch, 3.7*inch])
     t.setStyle(TableStyle([('GRID', (0,0), (-1,-1), 0.5, colors.lightgrey), ('VALIGN', (0,0), (-1,-1), 'MIDDLE')]))
     story.append(t)
-    story.append(Spacer(1, 15))
 
-    # Secciones de Texto
+    # Secciones Técnicas
     secciones = [
         ("1. Revisión Física", datos['rev_fisica']),
         ("2. Ingresa a servicio técnico", datos['ingreso_tec']),
@@ -86,54 +94,38 @@ def generar_pdf(datos, lista_fotos_procesadas):
         story.append(Paragraph(contenido.replace('\n', '<br/>'), est_txt))
         story.append(Spacer(1, 5))
 
-    # --- NUEVA LÓGICA DE FOTOS EN EL PDF ---
-    if lista_fotos_procesadas:
-        story.append(Paragraph("EVIDENCIA FOTOGRÁFICA", est_sec))
+    # --- IMÁGENES CON DESCRIPCIÓN ---
+    if lista_imagenes_procesadas:
+        story.append(Paragraph("EVIDENCIA DE IMÁGENES", est_sec))
         story.append(Spacer(1, 10))
         
-        # Creamos una tabla para las fotos: Columna 1 = Imagen, Columna 2 = Descripción
         tabla_fotos_data = []
-        
-        for idx, item in enumerate(lista_fotos_procesadas):
-            # Procesar imagen
-            img_byte_arr = item['imagen']
-            descripcion_texto = item['descripcion']
-            
-            # Crear objeto Image de ReportLab
-            img_obj = Image(img_byte_arr, width=2.5*inch, height=1.8*inch) # Tamaño ajustado
-            
-            # Crear párrafo de descripción con número
-            p_desc = Paragraph(f"<b>Foto #{idx + 1}:</b><br/>{descripcion_texto}", est_desc_foto)
-            
-            # Añadir fila a la tabla
+        for idx, item in enumerate(lista_imagenes_procesadas):
+            img_obj = Image(item['imagen'], width=2.4*inch, height=1.7*inch)
+            p_desc = Paragraph(f"<b>Imagen #{idx + 1}:</b><br/>{item['descripcion']}", est_txt)
             tabla_fotos_data.append([img_obj, p_desc])
         
-        # Crear la tabla de fotos
-        t_fotos = Table(tabla_fotos_data, colWidths=[2.7*inch, 4.5*inch])
-        t_fotos.setStyle(TableStyle([
-            ('VALIGN', (0,0), (-1,-1), 'MIDDLE'), # Centrar verticalmente
-            ('LEFTPADDING', (0,0), (-1,-1), 0),
-            ('BOTTOMPADDING', (0,0), (-1,-1), 15), # Espacio entre filas
-            ('GRID', (0,0), (-1,-1), 0.25, colors.lightgrey) # Borde sutil opcional
-        ]))
-        
+        t_fotos = Table(tabla_fotos_data, colWidths=[2.6*inch, 4.6*inch])
+        t_fotos.setStyle(TableStyle([('VALIGN', (0,0), (-1,-1), 'MIDDLE'), ('BOTTOMPADDING', (0,0), (-1,-1), 12)]))
         story.append(t_fotos)
+
+    # --- SECCIÓN DE FIRMA ---
+    story.append(Spacer(1, 50))
+    story.append(HRFlowable(width=2.5*inch, thickness=1, color=colors.black, hAlign='CENTER'))
+    story.append(Paragraph("Revisado por:", est_firma))
+    story.append(Paragraph(datos['tecnico'], est_firma))
 
     doc.build(story, onFirstPage=agregar_marca_agua, onLaterPages=agregar_marca_agua)
     buffer.seek(0)
     return buffer.read()
 
-# --- 5. INTERFAZ ---
+# --- 5. INTERFAZ STREAMLIT ---
 st.title("🚀 Gestión de Reportes Técnicos")
 
-# Búsqueda de Orden
 st.subheader("1. Localizar Orden")
 orden_id = st.text_input("Ingrese número de Orden")
-
-# Variables por defecto
 c_v, s_v, p_v, f_v, ff_v = "", "", "", "", date.today()
 
-# Lógica de carga automática (fuera del form para reactividad)
 if orden_id and not df_db.empty:
     res = df_db[df_db['Orden'] == orden_id]
     if not res.empty:
@@ -145,7 +137,6 @@ if orden_id and not df_db.empty:
 
 st.markdown("---")
 
-# --- FORMULARIO DE DATOS (Sin st.form para permitir dinámica en fotos) ---
 col1, col2 = st.columns(2)
 with col1:
     tipo_rep = st.selectbox("Tipo de Reporte", options=OPCIONES_REPORTE)
@@ -158,76 +149,47 @@ with col2:
     f_fec_fac = st.date_input("Fecha Factura", value=ff_v)
 
 st.subheader("Detalles Técnicos")
-f_rev_fisica = st.text_area("1. Revisión Física", height=100)
-f_ingreso_tec = st.text_area("2. Ingresa a servicio técnico", height=100)
-
-t_electro = "Se procede a revisar el sistema de alimentación de energía y sus líneas de conexión.\nSe procede a revisar el sistema electrónico del equipo."
-f_rev_electro = st.text_area("3. Revisión electro-electrónica-mecanica", value=t_electro, height=100)
-
-f_obs = st.text_area("4. Observaciones", value="Luego de la revisión del artículo se observa lo siguiente: ", height=100)
+f_rev_fisica = st.text_area("1. Revisión Física")
+f_ingreso_tec = st.text_area("2. Ingresa a servicio técnico")
+f_rev_electro = st.text_area("3. Revisión electro-electrónica-mecanica", value="Se procede a revisar el sistema de alimentación de energía y sus líneas de conexión.\nSe procede a revisar el sistema electrónico del equipo.")
+f_obs = st.text_area("4. Observaciones", value="Luego de la revisión del artículo se observa lo siguiente: ")
 
 concl_map = {
     "FUERA DE GARANTIA": "Con base en estos hallazgos, lamentamos indicarle que el daño identificado no es atribuible a defectos de fabricación o materiales, sino al uso indebido del equipo, lo cual invalida la cobertura de garantía.",
     "INFORME TECNICO": "Con base en estos hallazgos, lamentamos indicarle que el daño identificado no es atribuible a defectos de fabricación o materiales",
     "RECLAMO AL PROVEEDOR": "Se concluye que el daño es de fábrica debido a las características presentadas. Solicitamos su colaboración con el reclamo pertinente al proveedor."
 }
-f_conclusiones = st.text_area("5. Conclusiones", value=concl_map[tipo_rep], height=100)
+f_conclusiones = st.text_area("5. Conclusiones", value=concl_map[tipo_rep])
 
 st.markdown("---")
-st.subheader("📸 Evidencia Fotográfica y Descripciones")
+st.subheader("📸 Evidencia de Imágenes")
+uploaded_files = st.file_uploader("Subir imágenes", type=['jpg','png','jpeg'], accept_multiple_files=True)
 
-# Uploader de fotos
-uploaded_files = st.file_uploader("Subir fotos (Seleccione varias)", type=['jpg','png','jpeg'], accept_multiple_files=True)
-
-lista_fotos_final = []
-
+lista_imagenes_final = []
 if uploaded_files:
-    st.info(f"Has subido {len(uploaded_files)} fotos. Por favor añade una descripción a cada una.")
-    
-    # Iteramos sobre los archivos subidos para mostrar inputs dinámicos
     for i, file in enumerate(uploaded_files):
         c_img, c_txt = st.columns([1, 2])
-        
         with c_img:
-            # Mostrar miniatura
-            st.image(file, width=150, caption=f"Foto #{i+1}")
-            
+            st.image(file, width=150, caption=f"Imagen #{i+1}")
         with c_txt:
-            # Input de texto para la descripción
-            desc = st.text_area(f"Descripción para la Foto #{i+1}", key=f"desc_{file.name}_{i}", height=100)
-            
-        # Preparamos los datos para el PDF (guardamos el archivo en memoria y la descripción)
+            desc = st.text_area(f"Descripción para Imagen #{i+1}", key=f"img_{i}")
+        
         file.seek(0)
         p_img = PilImage.open(file)
         if p_img.mode in ('RGBA', 'P'): p_img = p_img.convert('RGB')
-        
         img_byte = BytesIO()
         p_img.save(img_byte, format='JPEG', quality=80)
         img_byte.seek(0)
-        
-        lista_fotos_final.append({
-            "imagen": img_byte,
-            "descripcion": desc if desc else "Sin descripción."
-        })
-    
-    st.markdown("---")
+        lista_imagenes_final.append({"imagen": img_byte, "descripcion": desc if desc else "Sin descripción."})
 
-# Botón de Generación
 if st.button("💾 GENERAR REPORTE PDF", type="primary"):
-    if f_cliente and f_conclusiones:
-        # Verificar watermark
-        if not os.path.exists("watermark.png"):
-             st.warning("⚠️ No se detectó 'watermark.png'. El PDF se generará sin fondo.")
-
+    if f_cliente:
         pdf_data = generar_pdf({
             "tipo_reporte": tipo_rep, "orden": orden_id, "cliente": f_cliente,
             "factura": f_fac, "fecha_factura": f_fec_fac, "producto": f_prod,
             "serie": f_serie, "tecnico": f_tecnico, "fecha_hoy": date.today(),
             "rev_fisica": f_rev_fisica, "ingreso_tec": f_ingreso_tec,
             "rev_electro": f_rev_electro, "observaciones": f_obs, "conclusiones": f_conclusiones
-        }, lista_fotos_final)
-        
-        st.success("✅ ¡Informe generado exitosamente!")
+        }, lista_imagenes_final)
+        st.success("✅ Informe generado.")
         st.download_button("📥 DESCARGAR PDF", data=pdf_data, file_name=f"Informe_{orden_id}.pdf")
-    else:
-        st.error("⚠️ Por favor, asegúrese de que los campos 'Cliente' y 'Conclusiones' no estén vacíos.")
