@@ -15,18 +15,21 @@ from reportlab.lib import colors
 # --- 1. CONFIGURACIÓN ---
 st.set_page_config(page_title="Generador de Reportes", page_icon="🔧", layout="centered")
 
-# --- 2. CARGA DE DATOS ---
+# --- 2. CARGA DE DATOS (REFORZADA CONTRA ERRORES) ---
 @st.cache_data
 def cargar_datos_servicios():
     if os.path.exists("servicios.csv"):
+        # Intenta varios encodings para evitar UnicodeDecodeError
         for encoding in ['utf-8', 'latin-1', 'iso-8859-1', 'cp1252']:
             try:
                 df = pd.read_csv("servicios.csv", dtype=str, encoding=encoding, sep=None, engine='python')
                 df.columns = df.columns.str.strip()
+                # Estandarización de nombres de columnas
                 nombres_clave = {'Serie/Artículo': 'Serie', 'Fec. Fac. Min': 'Fec_Fac_Min', 'Fac. Min': 'Fac_Min'}
                 df = df.rename(columns=nombres_clave)
                 return df
-            except: continue
+            except Exception:
+                continue
     return pd.DataFrame(columns=['Orden', 'Cliente', 'Serie', 'Producto', 'Fec_Fac_Min', 'Fac_Min'])
 
 df_db = cargar_datos_servicios()
@@ -53,23 +56,27 @@ def generar_pdf(datos, lista_imagenes_procesadas):
     except AttributeError: color_principal = colors.hexColor("#003366")
 
     est_titulo = ParagraphStyle('T', fontSize=16, alignment=1, fontName='Helvetica-Bold', textColor=color_principal)
-    est_sec = ParagraphStyle('S', fontSize=10, fontName='Helvetica-Bold', textColor=colors.white, backColor=color_principal, borderPadding=3, spaceBefore=8)
+    
+    # FRANJA REDUCIDA (borderPadding=1)
+    est_sec = ParagraphStyle('S', fontSize=10, fontName='Helvetica-Bold', textColor=colors.white, 
+                            backColor=color_principal, borderPadding=1, spaceBefore=8)
+    
     est_txt = ParagraphStyle('TXT', fontSize=9, fontName='Helvetica', leading=11)
     est_firma = ParagraphStyle('F', fontSize=10, fontName='Helvetica-Bold', alignment=1)
 
     story = []
 
-    # LOGO
+    # LOGO (Superior Izquierda)
     logo_path = "logo.png"
     if os.path.exists(logo_path):
-        img_logo = Image(logo_path, width=1.5*inch, height=0.6*inch)
+        img_logo = Image(logo_path, width=1.4*inch, height=0.55*inch)
         img_logo.hAlign = 'LEFT'
         story.append(img_logo)
     
     story.append(Paragraph("INFORME TÉCNICO DE SERVICIO", est_titulo))
     story.append(Spacer(1, 15))
     
-    # Datos del Cliente
+    # Tabla de Datos
     info = [
         [Paragraph(f"<b>Orden:</b> {datos['orden']}", est_txt), Paragraph(f"<b>Factura:</b> {datos['factura']}", est_txt)],
         [Paragraph(f"<b>Cliente:</b> {datos['cliente']}", est_txt), Paragraph(f"<b>Fec. Factura:</b> {datos['fecha_factura']}", est_txt)],
@@ -94,7 +101,7 @@ def generar_pdf(datos, lista_imagenes_procesadas):
         story.append(Paragraph(contenido.replace('\n', '<br/>'), est_txt))
         story.append(Spacer(1, 5))
 
-    # Imágenes
+    # IMÁGENES
     if lista_imagenes_procesadas:
         story.append(Paragraph("EVIDENCIA DE IMÁGENES", est_sec))
         story.append(Spacer(1, 10))
@@ -103,11 +110,12 @@ def generar_pdf(datos, lista_imagenes_procesadas):
             img_obj = Image(item['imagen'], width=2.4*inch, height=1.7*inch)
             p_desc = Paragraph(f"<b>Imagen #{idx + 1}:</b><br/>{item['descripcion']}", est_txt)
             tabla_fotos_data.append([img_obj, p_desc])
+        
         t_fotos = Table(tabla_fotos_data, colWidths=[2.6*inch, 4.6*inch])
         t_fotos.setStyle(TableStyle([('VALIGN', (0,0), (-1,-1), 'MIDDLE'), ('BOTTOMPADDING', (0,0), (-1,-1), 12)]))
         story.append(t_fotos)
 
-    # Firma
+    # FIRMA
     story.append(Spacer(1, 50))
     story.append(HRFlowable(width=2.5*inch, thickness=1, color=colors.black, hAlign='CENTER'))
     story.append(Paragraph("Revisado por:", est_firma))
@@ -128,10 +136,14 @@ if orden_id and not df_db.empty:
     res = df_db[df_db['Orden'] == orden_id]
     if not res.empty:
         row = res.iloc[0]
-        c_v, s_v, p_v, f_v = row.get('Cliente',''), row.get('Serie',''), row.get('Producto',''), row.get('Fac_Min','')
-        try: ff_v = pd.to_datetime(str(row.get('Fec_Fac_Min',''))).date()
-        except: pass
-        st.success("✅ Datos cargados.")
+        # Uso de .get() para evitar KeyError
+        c_v = row.get('Cliente', '')
+        s_v = row.get('Serie', '')
+        p_v = row.get('Producto', '')
+        f_v = row.get('Fac_Min', '')
+        try: ff_v = pd.to_datetime(str(row.get('Fec_Fac_Min', ''))).date()
+        except Exception: pass
+        st.success("✅ Datos cargados correctamente.")
 
 st.markdown("---")
 
@@ -148,12 +160,13 @@ with col2:
 
 st.subheader("Detalles Técnicos")
 
-# NUEVA LÓGICA SOLICITADA PARA REVISIÓN FÍSICA
+# Lógica solicitada para Revisión Física
 texto_rev_fisica = f"Ingresa a servicio técnico {f_prod}. Se observa el uso continuo del artículo."
 f_rev_fisica = st.text_area("1. Revisión Física", value=texto_rev_fisica)
 
 f_ingreso_tec = st.text_area("2. Ingresa a servicio técnico")
-f_rev_electro = st.text_area("3. Revisión electro-electrónica-mecanica", value="Se procede a revisar el sistema de alimentación de energía y sus líneas de conexión.\nSe procede a revisar el sistema electrónico del equipo.")
+f_rev_electro = st.text_area("3. Revisión electro-electrónica-mecanica", 
+                            value="Se procede a revisar el sistema de alimentación de energía y sus líneas de conexión.\nSe procede a revisar el sistema electrónico del equipo.")
 f_obs = st.text_area("4. Observaciones", value="Luego de la revisión del artículo se observa lo siguiente: ")
 
 concl_map = {
@@ -174,7 +187,8 @@ if uploaded_files:
         with c_img:
             st.image(file, width=150, caption=f"Imagen #{i+1}")
         with c_txt:
-            desc = st.text_area(f"Descripción para Imagen #{i+1}", key=f"img_{i}")
+            desc = st.text_area(f"Descripción para Imagen #{i+1}", key=f"img_desc_{i}")
+        
         file.seek(0)
         p_img = PilImage.open(file)
         if p_img.mode in ('RGBA', 'P'): p_img = p_img.convert('RGB')
@@ -192,5 +206,7 @@ if st.button("💾 GENERAR REPORTE PDF", type="primary"):
             "rev_fisica": f_rev_fisica, "ingreso_tec": f_ingreso_tec,
             "rev_electro": f_rev_electro, "observaciones": f_obs, "conclusiones": f_conclusiones
         }, lista_imagenes_final)
-        st.success("✅ Informe generado.")
+        st.success("✅ Informe generado exitosamente.")
         st.download_button("📥 DESCARGAR PDF", data=pdf_data, file_name=f"Informe_{orden_id}.pdf")
+    else:
+        st.error("⚠️ El campo 'Cliente' no puede estar vacío.")
