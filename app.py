@@ -19,12 +19,10 @@ st.set_page_config(page_title="Generador de Reportes", page_icon="🔧", layout=
 @st.cache_data
 def cargar_datos_servicios():
     if os.path.exists("servicios.csv"):
-        # Intenta varios encodings para evitar UnicodeDecodeError visto en logs
         for encoding in ['utf-8', 'latin-1', 'iso-8859-1', 'cp1252']:
             try:
                 df = pd.read_csv("servicios.csv", dtype=str, encoding=encoding, sep=None, engine='python')
                 df.columns = df.columns.str.strip()
-                # Renombrado para evitar KeyError al buscar columnas
                 nombres_clave = {'Serie/Artículo': 'Serie', 'Fec. Fac. Min': 'Fec_Fac_Min', 'Fac. Min': 'Fac_Min'}
                 df = df.rename(columns=nombres_clave)
                 return df
@@ -41,7 +39,7 @@ def agregar_marca_agua(canvas, doc):
     watermark_file = "watermark.png"
     if os.path.exists(watermark_file):
         canvas.saveState()
-        canvas.setFillAlpha(0.12) # Transparencia del fondo
+        canvas.setFillAlpha(0.12)
         page_width, page_height = canvas._pagesize
         canvas.drawImage(watermark_file, 0, 0, width=page_width, height=page_height, 
                          mask='auto', preserveAspectRatio=True, anchor='c')
@@ -56,17 +54,13 @@ def generar_pdf(datos, lista_imagenes_procesadas):
     except: color_principal = colors.navy
 
     est_titulo = ParagraphStyle('T', fontSize=16, alignment=1, fontName='Helvetica-Bold', textColor=color_principal)
-    
-    # FRANJA REDUCIDA (borderPadding=1)
     est_sec = ParagraphStyle('S', fontSize=10, fontName='Helvetica-Bold', textColor=colors.white, 
                             backColor=color_principal, borderPadding=1, spaceBefore=8)
-    
     est_txt = ParagraphStyle('TXT', fontSize=9, fontName='Helvetica', leading=11)
     est_firma = ParagraphStyle('F', fontSize=10, fontName='Helvetica-Bold', alignment=1)
 
     story = []
 
-    # LOGO (Superior Izquierda)
     if os.path.exists("logo.png"):
         img_logo = Image("logo.png", width=1.4*inch, height=0.55*inch)
         img_logo.hAlign = 'LEFT'
@@ -75,9 +69,11 @@ def generar_pdf(datos, lista_imagenes_procesadas):
     story.append(Paragraph("INFORME TÉCNICO DE SERVICIO", est_titulo))
     story.append(Spacer(1, 15))
     
-    # Tabla de Datos de la Orden
+    # Lógica Factura: Si es "0", colocar "STOCK"
+    factura_texto = "STOCK" if str(datos['factura']).strip() == "0" else datos['factura']
+
     info = [
-        [Paragraph(f"<b>Orden:</b> {datos['orden']}", est_txt), Paragraph(f"<b>Factura:</b> {datos['factura']}", est_txt)],
+        [Paragraph(f"<b>Orden:</b> {datos['orden']}", est_txt), Paragraph(f"<b>Factura:</b> {factura_texto}", est_txt)],
         [Paragraph(f"<b>Cliente:</b> {datos['cliente']}", est_txt), Paragraph(f"<b>Fec. Factura:</b> {datos['fecha_factura']}", est_txt)],
         [Paragraph(f"<b>Producto:</b> {datos['producto']}", est_txt), Paragraph(f"<b>Serie:</b> {datos['serie']}", est_txt)],
         [Paragraph(f"<b>Técnico:</b> {datos['tecnico']}", est_txt), Paragraph(f"<b>Fecha Reporte:</b> {datos['fecha_hoy']}", est_txt)]
@@ -86,7 +82,6 @@ def generar_pdf(datos, lista_imagenes_procesadas):
     t.setStyle(TableStyle([('GRID', (0,0), (-1,-1), 0.5, colors.lightgrey), ('VALIGN', (0,0), (-1,-1), 'MIDDLE')]))
     story.append(t)
 
-    # Secciones de Texto
     secciones = [
         ("1. Revisión Física", datos['rev_fisica']),
         ("2. Ingresa a servicio técnico", datos['ingreso_tec']),
@@ -100,7 +95,6 @@ def generar_pdf(datos, lista_imagenes_procesadas):
         story.append(Paragraph(contenido.replace('\n', '<br/>'), est_txt))
         story.append(Spacer(1, 5))
 
-    # EVIDENCIA DE IMÁGENES
     if lista_imagenes_procesadas:
         story.append(Paragraph("EVIDENCIA DE IMÁGENES", est_sec))
         story.append(Spacer(1, 10))
@@ -109,12 +103,10 @@ def generar_pdf(datos, lista_imagenes_procesadas):
             img_obj = Image(item['imagen'], width=2.4*inch, height=1.7*inch)
             p_desc = Paragraph(f"<b>Imagen #{idx + 1}:</b><br/>{item['descripcion']}", est_txt)
             tabla_imgs.append([img_obj, p_desc])
-        
         t_fotos = Table(tabla_imgs, colWidths=[2.6*inch, 4.6*inch])
         t_fotos.setStyle(TableStyle([('VALIGN', (0,0), (-1,-1), 'MIDDLE'), ('BOTTOMPADDING', (0,0), (-1,-1), 12)]))
         story.append(t_fotos)
 
-    # SECCIÓN DE FIRMA (Nombre del técnico automático)
     story.append(Spacer(1, 50))
     story.append(HRFlowable(width=2.5*inch, thickness=1, color=colors.black, hAlign='CENTER'))
     story.append(Paragraph("Revisado por:", est_firma))
@@ -124,10 +116,9 @@ def generar_pdf(datos, lista_imagenes_procesadas):
     buffer.seek(0)
     return buffer.read()
 
-# --- 5. INTERFAZ STREAMLIT ---
+# --- 5. INTERFAZ ---
 st.title("🚀 Gestión de Reportes Técnicos")
 
-st.subheader("1. Localizar Orden")
 orden_id = st.text_input("Ingrese número de Orden")
 c_v, s_v, p_v, f_v, ff_v = "", "", "", "", date.today()
 
@@ -135,10 +126,13 @@ if orden_id and not df_db.empty:
     res = df_db[df_db['Orden'] == orden_id]
     if not res.empty:
         row = res.iloc[0]
-        c_v, s_v, p_v, f_v = row.get('Cliente',''), row.get('Serie',''), row.get('Producto',''), row.get('Fac_Min','')
+        c_v = row.get('Cliente','')
+        s_v = row.get('Serie','')
+        p_v = row.get('Producto','')
+        f_v = row.get('Fac_Min','')
         try: ff_v = pd.to_datetime(str(row.get('Fec_Fac_Min',''))).date()
         except: pass
-        st.success("✅ Datos cargados correctamente.")
+        st.success("✅ Datos cargados.")
 
 st.markdown("---")
 
@@ -150,18 +144,15 @@ with col1:
     f_serie = st.text_input("Serie/Artículo", value=s_v)
 with col2:
     f_tecnico = st.selectbox("Técnico Asignado", options=LISTA_TECNICOS)
+    # Mostramos "0" si es stock, la función generar_pdf se encarga del texto final
     f_fac = st.text_input("Factura", value=f_v)
     f_fec_fac = st.date_input("Fecha Factura", value=ff_v)
 
 st.subheader("Detalles Técnicos")
-
-# Lógica dinámica para Revisión Física
 texto_rev_fisica = f"Ingresa a servicio técnico {f_prod}. Se observa el uso continuo del artículo."
 f_rev_fisica = st.text_area("1. Revisión Física", value=texto_rev_fisica)
-
 f_ingreso_tec = st.text_area("2. Ingresa a servicio técnico")
-f_rev_electro = st.text_area("3. Revisión electro-electrónica-mecanica", 
-                            value="Se procede a revisar el sistema de alimentación de energía y sus líneas de conexión.\nSe procede a revisar el sistema electrónico del equipo.")
+f_rev_electro = st.text_area("3. Revisión electro-electrónica-mecanica", value="Se procede a revisar el sistema de alimentación de energía y sus líneas de conexión.\nSe procede a revisar el sistema electrónico del equipo.")
 f_obs = st.text_area("4. Observaciones", value="Luego de la revisión del artículo se observa lo siguiente: ")
 
 concl_map = {
@@ -172,18 +163,13 @@ concl_map = {
 f_conclusiones = st.text_area("5. Conclusiones", value=concl_map[tipo_rep])
 
 st.markdown("---")
-st.subheader("📸 Evidencia de Imágenes")
 uploaded_files = st.file_uploader("Subir imágenes", type=['jpg','png','jpeg'], accept_multiple_files=True)
-
 lista_imgs_final = []
 if uploaded_files:
     for i, file in enumerate(uploaded_files):
         c_img, c_txt = st.columns([1, 2])
-        with c_img:
-            st.image(file, width=150, caption=f"Imagen #{i+1}")
-        with c_txt:
-            desc = st.text_area(f"Descripción para Imagen #{i+1}", key=f"img_{i}")
-        
+        with c_img: st.image(file, width=150)
+        with c_txt: desc = st.text_area(f"Descripción Imagen #{i+1}", key=f"img_{i}")
         file.seek(0)
         p_img = PilImage.open(file)
         if p_img.mode in ('RGBA', 'P'): p_img = p_img.convert('RGB')
@@ -193,16 +179,11 @@ if uploaded_files:
         lista_imgs_final.append({"imagen": img_byte, "descripcion": desc if desc else "Sin descripción."})
 
 if st.button("💾 GENERAR REPORTE PDF", type="primary"):
-    if f_cliente:
-        pdf_data = generar_pdf({
-            "orden": orden_id, "cliente": f_cliente, "factura": f_fac, 
-            "fecha_factura": f_fec_fac, "producto": f_prod, "serie": f_serie, 
-            "tecnico": f_tecnico, "fecha_hoy": date.today(), "rev_fisica": f_rev_fisica, 
-            "ingreso_tec": f_ingreso_tec, "rev_electro": f_rev_electro, 
-            "observaciones": f_obs, "conclusiones": f_conclusiones
-        }, lista_imgs_final)
-        
-        st.success("✅ Informe generado.")
-        st.download_button("📥 DESCARGAR PDF", data=pdf_data, file_name=f"Informe_{orden_id}.pdf")
-    else:
-        st.error("⚠️ Ingrese al menos el nombre del cliente.")
+    pdf_data = generar_pdf({
+        "orden": orden_id, "cliente": f_cliente, "factura": f_fac, 
+        "fecha_factura": f_fec_fac, "producto": f_prod, "serie": f_serie, 
+        "tecnico": f_tecnico, "fecha_hoy": date.today(), "rev_fisica": f_rev_fisica, 
+        "ingreso_tec": f_ingreso_tec, "rev_electro": f_rev_electro, 
+        "observaciones": f_obs, "conclusiones": f_conclusiones
+    }, lista_imgs_final)
+    st.download_button("📥 DESCARGAR PDF", data=pdf_data, file_name=f"Informe_{orden_id}.pdf")
