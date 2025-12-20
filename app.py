@@ -1,6 +1,5 @@
 import streamlit as st
 import pandas as pd
-import matplotlib.pyplot as plt
 from datetime import date, datetime
 from io import BytesIO
 from PIL import Image as PilImage 
@@ -12,9 +11,10 @@ from reportlab.lib.styles import getSampleStyleSheet, ParagraphStyle
 from reportlab.platypus import SimpleDocTemplate, Paragraph, Spacer, Image, Table, TableStyle, HRFlowable
 from reportlab.lib.units import inch
 from reportlab.lib import colors
+from reportlab.lib.utils import ImageReader # Necesario para leer la imagen de fondo
 
 # --- 1. CONFIGURACIÓN ---
-st.set_page_config(page_title="Sistema de Gestión Técnica", page_icon="🔧", layout="centered")
+st.set_page_config(page_title="Generador de Reportes", page_icon="🔧", layout="centered")
 
 # --- 2. CARGA DE DATOS (BLINDADA) ---
 @st.cache_data
@@ -34,44 +34,63 @@ df_db = cargar_datos_servicios()
 LISTA_TECNICOS = ["Tec. Juan Diego Quezada", "Tec. Xavier Ramon", "Tec. Santiago Farez"]
 OPCIONES_REPORTE = ["FUERA DE GARANTIA", "INFORME TECNICO", "RECLAMO AL PROVEEDOR"]
 
-# --- 3. GRÁFICO DE CONTROL (REGLA: SIEMPRE GENERAR) ---
-def mostrar_grafico():
-    fig, ax = plt.subplots(figsize=(7, 2))
-    ax.barh(['Efectividad Operativa'], [90], color='#003366')
-    ax.set_xlim(0, 100)
-    ax.set_title("Progreso de Gestión de Órdenes (%)")
-    st.pyplot(fig)
+# --- NUEVA FUNCIÓN: MARCA DE AGUA ---
+def agregar_marca_agua(canvas, doc):
+    """Dibuja la marca de agua en el fondo de la página."""
+    # Nombre del archivo de imagen de marca de agua
+    watermark_file = "watermark.png"
+    
+    if os.path.exists(watermark_file):
+        # Guardamos el estado actual del canvas
+        canvas.saveState()
+        
+        # Establecemos la transparencia (0.1 es muy transparente, 1.0 es opaco)
+        # Ajusta este valor si la quieres más o menos visible. 0.15 es un buen punto medio.
+        canvas.setFillAlpha(0.15)
+        
+        # Obtenemos las dimensiones de la página (Carta/Letter)
+        page_width, page_height = canvas._pagesize
+        
+        # Dibujamos la imagen.
+        # (0, 0) es la esquina inferior izquierda.
+        # width y height cubren toda la página.
+        # preserveAspectRatio=True asegura que el logo no se deforme, 
+        # anchor='c' lo centra en el área total de la página.
+        canvas.drawImage(watermark_file, 0, 0, width=page_width, height=page_height, 
+                         mask='auto', preserveAspectRatio=True, anchor='c')
+        
+        # Restauramos el estado del canvas para no afectar al texto siguiente
+        canvas.restoreState()
 
-# --- 4. FUNCIÓN GENERAR PDF (SIN TEXTO ROJO) ---
+# --- 3. FUNCIÓN GENERAR PDF (MODIFICADA) ---
 def generar_pdf(datos, imagenes_cargadas):
     buffer = BytesIO()
-    doc = SimpleDocTemplate(buffer, pagesize=letter, topMargin=0.4*inch, bottomMargin=0.4*inch)
+    # Definimos márgenes. Top margin un poco más alto para el título.
+    doc = SimpleDocTemplate(buffer, pagesize=letter, topMargin=0.5*inch, bottomMargin=0.4*inch, leftMargin=0.5*inch, rightMargin=0.5*inch)
     
     try: color_principal = colors.HexColor("#003366")
     except AttributeError: color_principal = colors.hexColor("#003366")
 
-    est_titulo = ParagraphStyle('T', fontSize=16, alignment=1, fontName='Helvetica-Bold', textColor=color_principal)
-    est_sec = ParagraphStyle('S', fontSize=10, fontName='Helvetica-Bold', textColor=colors.white, backColor=color_principal, borderPadding=3)
+    est_titulo = ParagraphStyle('T', fontSize=16, alignment=1, fontName='Helvetica-Bold', textColor=color_principal, spaceAfter=20)
+    est_sec = ParagraphStyle('S', fontSize=10, fontName='Helvetica-Bold', textColor=colors.white, backColor=color_principal, borderPadding=3, spaceBefore=10)
     est_txt = ParagraphStyle('TXT', fontSize=9, fontName='Helvetica', leading=11)
 
     story = []
     story.append(Paragraph("INFORME TÉCNICO DE SERVICIO", est_titulo))
-    # SE HA ELIMINADO LA LÍNEA DEL TIPO DE REPORTE EN ROJO AQUÍ
-    story.append(Spacer(1, 15))
+    # story.append(Spacer(1, 10)) # Espacio eliminado, el título ya tiene spaceAfter
     
-    # Tabla de Datos Generales
     info = [
         [Paragraph(f"<b>Orden:</b> {datos['orden']}", est_txt), Paragraph(f"<b>Factura:</b> {datos['factura']}", est_txt)],
         [Paragraph(f"<b>Cliente:</b> {datos['cliente']}", est_txt), Paragraph(f"<b>Fec. Factura:</b> {datos['fecha_factura']}", est_txt)],
         [Paragraph(f"<b>Producto:</b> {datos['producto']}", est_txt), Paragraph(f"<b>Serie:</b> {datos['serie']}", est_txt)],
         [Paragraph(f"<b>Técnico:</b> {datos['tecnico']}", est_txt), Paragraph(f"<b>Fecha Reporte:</b> {datos['fecha_hoy']}", est_txt)]
     ]
-    t = Table(info, colWidths=[3.5*inch, 3.5*inch])
-    t.setStyle(TableStyle([('GRID', (0,0), (-1,-1), 0.5, colors.lightgrey)]))
+    # Tabla un poco más ancha para aprovechar el espacio
+    t = Table(info, colWidths=[3.7*inch, 3.7*inch])
+    t.setStyle(TableStyle([('GRID', (0,0), (-1,-1), 0.5, colors.lightgrey), ('VALIGN', (0,0), (-1,-1), 'MIDDLE')]))
     story.append(t)
-    story.append(Spacer(1, 10))
+    story.append(Spacer(1, 15))
 
-    # Secciones Técnicas (1 al 5)
     secciones = [
         ("1. Revisión Física", datos['rev_fisica']),
         ("2. Ingresa a servicio técnico", datos['ingreso_tec']),
@@ -82,28 +101,37 @@ def generar_pdf(datos, imagenes_cargadas):
 
     for titulo, contenido in secciones:
         story.append(Paragraph(titulo, est_sec))
+        # Reemplazamos saltos de línea por <br/> para que ReportLab los respete
         story.append(Paragraph(contenido.replace('\n', '<br/>'), est_txt))
-        story.append(Spacer(1, 8))
+        story.append(Spacer(1, 5))
 
     if imagenes_cargadas:
         story.append(Paragraph("EVIDENCIA FOTOGRÁFICA", est_sec))
+        story.append(Spacer(1, 10))
         for img_file in imagenes_cargadas:
-            img_file.seek(0)
-            p_img = PilImage.open(img_file)
-            img_b = BytesIO()
-            if p_img.mode in ('RGBA', 'P'): p_img = p_img.convert('RGB')
-            p_img.save(img_b, format='JPEG', quality=75)
-            img_b.seek(0)
-            story.append(Image(img_b, width=3*inch, height=2.2*inch))
-            story.append(Spacer(1, 10))
+            try:
+                img_file.seek(0)
+                p_img = PilImage.open(img_file)
+                img_b = BytesIO()
+                if p_img.mode in ('RGBA', 'P'): p_img = p_img.convert('RGB')
+                # Calidad alta para las fotos
+                p_img.save(img_b, format='JPEG', quality=85)
+                img_b.seek(0)
+                # Imágenes un poco más grandes
+                story.append(Image(img_b, width=3.2*inch, height=2.4*inch))
+                story.append(Spacer(1, 15))
+            except Exception as e:
+                 print(f"Error imagen: {e}")
 
-    doc.build(story)
+    # AQUÍ ESTÁ LA CLAVE: Se pasa la función de marca de agua al construir el PDF
+    # onFirstPage se aplica a la primera página, onLaterPages a todas las siguientes.
+    doc.build(story, onFirstPage=agregar_marca_agua, onLaterPages=agregar_marca_agua)
+    
     buffer.seek(0)
     return buffer.read()
 
-# --- 5. INTERFAZ ---
-st.title("🔧 Gestión de Servicio Técnico")
-mostrar_grafico()
+# --- 4. INTERFAZ ---
+st.title("🚀 Gestión de Reportes Técnicos")
 
 # Búsqueda de Orden
 with st.container():
@@ -123,7 +151,7 @@ st.markdown("---")
 
 # Formulario
 with st.form("form_tecnico"):
-    tipo_rep = st.selectbox("Tipo de Reporte (Define la conclusión automática)", options=OPCIONES_REPORTE)
+    tipo_rep = st.selectbox("Tipo de Reporte", options=OPCIONES_REPORTE)
     
     col1, col2 = st.columns(2)
     with col1:
@@ -146,17 +174,21 @@ with st.form("form_tecnico"):
     concl_map = {
         "FUERA DE GARANTIA": "Con base en estos hallazgos, lamentamos indicarle que el daño identificado no es atribuible a defectos de fabricación o materiales, sino al uso indebido del equipo, lo cual invalida la cobertura de garantía.",
         "INFORME TECNICO": "Con base en estos hallazgos, lamentamos indicarle que el daño identificado no es atribuible a defectos de fabricación o materiales",
-        "RECLAMO AL PROVEEDOR": "ü Se concluye que el daño es de fábrica debido a las características presentadas. Solicitamos su colaboración con el reclamo pertinente al proveedor."
+        "RECLAMO AL PROVEEDOR": "Se concluye que el daño es de fábrica debido a las características presentadas. Solicitamos su colaboración con el reclamo pertinente al proveedor."
     }
     f_conclusiones = st.text_area("5. Conclusiones", value=concl_map[tipo_rep])
     
     f_fotos = st.file_uploader("Evidencia Fotográfica", type=['jpg','png','jpeg'], accept_multiple_files=True)
     
-    preparar = st.form_submit_button("💾 GENERAR REPORTE")
+    preparar = st.form_submit_button("💾 PREPARAR REPORTE")
 
-# Botón de descarga fuera del formulario
+# Botón de descarga
 if preparar:
     if f_cliente and f_conclusiones:
+        # Verificar que exista la imagen de marca de agua antes de generar
+        if not os.path.exists("watermark.png"):
+             st.warning("⚠️ ADVERTENCIA: No se encontró el archivo 'watermark.png'. El reporte se generará sin marca de agua.")
+
         pdf_data = generar_pdf({
             "tipo_reporte": tipo_rep, "orden": orden_id, "cliente": f_cliente,
             "factura": f_fac, "fecha_factura": f_fec_fac, "producto": f_prod,
@@ -165,15 +197,7 @@ if preparar:
             "rev_electro": f_rev_electro, "observaciones": f_obs, "conclusiones": f_conclusiones
         }, f_fotos)
         
-        st.success("✅ El informe ha sido generado.")
+        st.success("✅ El informe ha sido generado exitosamente.")
         st.download_button("📥 DESCARGAR INFORME PDF", data=pdf_data, file_name=f"Informe_Tecnico_{orden_id}.pdf")
     else:
-        st.error("Complete los campos requeridos para continuar.")
-
-# --- 6. TABLA (REGLA: SIEMPRE MOSTRAR) ---
-st.markdown("---")
-st.subheader("🧑‍🔧 Técnicos a Nivel Nacional")
-st.table(pd.DataFrame({
-    "Ciudad": ["Guayaquil", "Guayaquil", "Quito", "Quito", "Cuenca", "Cuenca", "Cuenca", "Cuenca"],
-    "Técnicos": ["Carlos Jama", "Manuel Vera", "Javier Quiguango", "Wilson Quiguango", "Juan Diego Quezada", "Juan Farez", "Santiago Farez", "Xavier Ramón"]
-}))
+        st.error("Por favor, complete los campos obligatorios antes de generar el reporte.")
