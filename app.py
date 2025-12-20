@@ -59,7 +59,7 @@ def generar_pdf(datos, lista_imagenes_procesadas):
 
     story = []
 
-    # --- CABECERA: LOGO E IZQUIERDA ---
+    # LOGO
     logo_path = "logo.png"
     if os.path.exists(logo_path):
         img_logo = Image(logo_path, width=1.5*inch, height=0.6*inch)
@@ -69,7 +69,7 @@ def generar_pdf(datos, lista_imagenes_procesadas):
     story.append(Paragraph("INFORME TÉCNICO DE SERVICIO", est_titulo))
     story.append(Spacer(1, 15))
     
-    # Tabla de Datos del Cliente
+    # Datos del Cliente
     info = [
         [Paragraph(f"<b>Orden:</b> {datos['orden']}", est_txt), Paragraph(f"<b>Factura:</b> {datos['factura']}", est_txt)],
         [Paragraph(f"<b>Cliente:</b> {datos['cliente']}", est_txt), Paragraph(f"<b>Fec. Factura:</b> {datos['fecha_factura']}", est_txt)],
@@ -94,22 +94,20 @@ def generar_pdf(datos, lista_imagenes_procesadas):
         story.append(Paragraph(contenido.replace('\n', '<br/>'), est_txt))
         story.append(Spacer(1, 5))
 
-    # --- IMÁGENES CON DESCRIPCIÓN ---
+    # Imágenes
     if lista_imagenes_procesadas:
         story.append(Paragraph("EVIDENCIA DE IMÁGENES", est_sec))
         story.append(Spacer(1, 10))
-        
         tabla_fotos_data = []
         for idx, item in enumerate(lista_imagenes_procesadas):
             img_obj = Image(item['imagen'], width=2.4*inch, height=1.7*inch)
             p_desc = Paragraph(f"<b>Imagen #{idx + 1}:</b><br/>{item['descripcion']}", est_txt)
             tabla_fotos_data.append([img_obj, p_desc])
-        
         t_fotos = Table(tabla_fotos_data, colWidths=[2.6*inch, 4.6*inch])
         t_fotos.setStyle(TableStyle([('VALIGN', (0,0), (-1,-1), 'MIDDLE'), ('BOTTOMPADDING', (0,0), (-1,-1), 12)]))
         story.append(t_fotos)
 
-    # --- SECCIÓN DE FIRMA ---
+    # Firma
     story.append(Spacer(1, 50))
     story.append(HRFlowable(width=2.5*inch, thickness=1, color=colors.black, hAlign='CENTER'))
     story.append(Paragraph("Revisado por:", est_firma))
@@ -119,7 +117,7 @@ def generar_pdf(datos, lista_imagenes_procesadas):
     buffer.seek(0)
     return buffer.read()
 
-# --- 5. INTERFAZ STREAMLIT ---
+# --- 5. INTERFAZ ---
 st.title("🚀 Gestión de Reportes Técnicos")
 
 st.subheader("1. Localizar Orden")
@@ -149,7 +147,11 @@ with col2:
     f_fec_fac = st.date_input("Fecha Factura", value=ff_v)
 
 st.subheader("Detalles Técnicos")
-f_rev_fisica = st.text_area("1. Revisión Física")
+
+# NUEVA LÓGICA SOLICITADA PARA REVISIÓN FÍSICA
+texto_rev_fisica = f"Ingresa a servicio técnico {f_prod}. Se observa el uso continuo del artículo."
+f_rev_fisica = st.text_area("1. Revisión Física", value=texto_rev_fisica)
+
 f_ingreso_tec = st.text_area("2. Ingresa a servicio técnico")
 f_rev_electro = st.text_area("3. Revisión electro-electrónica-mecanica", value="Se procede a revisar el sistema de alimentación de energía y sus líneas de conexión.\nSe procede a revisar el sistema electrónico del equipo.")
 f_obs = st.text_area("4. Observaciones", value="Luego de la revisión del artículo se observa lo siguiente: ")
@@ -173,7 +175,6 @@ if uploaded_files:
             st.image(file, width=150, caption=f"Imagen #{i+1}")
         with c_txt:
             desc = st.text_area(f"Descripción para Imagen #{i+1}", key=f"img_{i}")
-        
         file.seek(0)
         p_img = PilImage.open(file)
         if p_img.mode in ('RGBA', 'P'): p_img = p_img.convert('RGB')
