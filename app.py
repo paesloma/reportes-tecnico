@@ -86,7 +86,7 @@ def generar_pdf(datos, lista_imagenes_procesadas):
 
     secciones = [
         ("1. Revisión Física", datos['rev_fisica']),
-        ("2. Observaciones ingreso a servicio tecnico", datos['ingreso_tec']),
+        ("2. Accesorios", datos['ingreso_tec']),
         ("3. Revisión electro-electrónica-mecanica", datos['rev_electro']),
         ("4. Observaciones", datos['observaciones']),
         ("5. Conclusiones", datos['conclusiones'])
@@ -159,7 +159,7 @@ with col2:
 st.subheader("Detalles Técnicos")
 texto_rev_fisica = f"Ingresa a servicio técnico {f_prod}. Se observa el uso continuo del artículo."
 f_rev_fisica = st.text_area("1. Revisión Física", value=texto_rev_fisica)
-f_ingreso_tec = st.text_area("2. Ingresa a servicio técnico")
+f_ingreso_tec = st.text_area("2. Accesorios")
 f_rev_electro = st.text_area("3. Revisión electro-electrónica-mecanica", value="Se procede a revisar el sistema de alimentación de energía y sus líneas de conexión.\nSe procede a revisar el sistema electrónico del equipo.")
 f_obs = st.text_area("4. Observaciones", value="Luego de la revisión del artículo se observa lo siguiente: ")
 
@@ -195,5 +195,6 @@ if st.button("💾 GENERAR REPORTE PDF", type="primary"):
         "observaciones": f_obs, "conclusiones": f_conclusiones
     }, lista_imgs_final)
     st.download_button("📥 DESCARGAR PDF", data=pdf_data, file_name=f"Informe_{orden_id}.pdf")
+
 
 
