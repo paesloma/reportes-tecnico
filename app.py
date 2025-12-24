@@ -33,7 +33,7 @@ def cargar_datos_servicios():
 df_db = cargar_datos_servicios()
 # Listas de personal
 LISTA_TECNICOS = ["Tec. Juan Diego Quezada", "Tec. Xavier Ramon", "Tec. Santiago Farez"]
-LISTA_REALIZADORES = ["Ing. Henry Beltran", "Tec. Juan Diego Quezada", "Tec. Xavier Ramon", "Tec. Santiago Farez"]
+LISTA_REALIZADORES = ["Ing. Henry Beltran", "Ing. Christian Calle", "Ing.Guillermo Ortiz", "Ing.Pablo Lopez"]
 OPCIONES_REPORTE = ["FUERA DE GARANTIA", "INFORME TECNICO", "RECLAMO AL PROVEEDOR"]
 
 # --- 3. MARCA DE AGUA ---
@@ -147,7 +147,6 @@ st.markdown("---")
 col1, col2 = st.columns(2)
 with col1:
     tipo_rep = st.selectbox("Tipo de Reporte", options=OPCIONES_REPORTE)
-    f_realizador = st.selectbox("Realizado por", options=LISTA_REALIZADORES) # Nueva lista con Henry Beltran
     f_cliente = st.text_input("Cliente", value=c_v)
     f_prod = st.text_input("Producto", value=p_v)
 with col2:
@@ -155,7 +154,8 @@ with col2:
     f_fac = st.text_input("Factura", value=f_v)
     f_fec_fac = st.date_input("Fecha Factura", value=ff_v)
     f_serie = st.text_input("Serie/Artículo", value=s_v)
-
+    f_realizador = st.selectbox("Realizado por", options=LISTA_REALIZADORES)
+    
 st.subheader("Detalles Técnicos")
 texto_rev_fisica = f"Ingresa a servicio técnico {f_prod}. Se observa el uso continuo del artículo."
 f_rev_fisica = st.text_area("1. Revisión Física", value=texto_rev_fisica)
@@ -195,3 +195,4 @@ if st.button("💾 GENERAR REPORTE PDF", type="primary"):
         "observaciones": f_obs, "conclusiones": f_conclusiones
     }, lista_imgs_final)
     st.download_button("📥 DESCARGAR PDF", data=pdf_data, file_name=f"Informe_{orden_id}.pdf")
+
