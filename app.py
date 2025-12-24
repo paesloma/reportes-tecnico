@@ -56,7 +56,7 @@ def generar_pdf(datos, lista_imagenes_procesadas):
 
     est_titulo = ParagraphStyle('T', fontSize=16, alignment=1, fontName='Helvetica-Bold', textColor=color_azul_institucional)
     est_sec = ParagraphStyle('S', fontSize=10, fontName='Helvetica-Bold', textColor=colors.white, 
-                            backColor=color_azul_institucional, borderPadding=2, spaceBefore=8)
+                            backColor=color_azul_institucional, borderPadding=1, spaceBefore=8)
     est_txt = ParagraphStyle('TXT', fontSize=9, fontName='Helvetica', leading=11)
     est_firma = ParagraphStyle('F', fontSize=10, fontName='Helvetica-Bold', alignment=1)
 
@@ -195,6 +195,7 @@ if st.button("💾 GENERAR REPORTE PDF", type="primary"):
         "observaciones": f_obs, "conclusiones": f_conclusiones
     }, lista_imgs_final)
     st.download_button("📥 DESCARGAR PDF", data=pdf_data, file_name=f"Informe_{orden_id}.pdf")
+
 
 
 
