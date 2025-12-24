@@ -31,7 +31,7 @@ def cargar_datos_servicios():
     return pd.DataFrame(columns=['Orden', 'Cliente', 'Serie', 'Producto', 'Fec_Fac_Min', 'Fac_Min'])
 
 df_db = cargar_datos_servicios()
-LISTA_TECNICOS = ["Tec. Juan Diego Quezada", "Tec. Xavier Ramon", "Tec. Santiago Farez"]
+LISTA_TECNICOS = ["Tec. Juan Diego Quezada", "Tec. Xavier Ramon", "Tec. Santiago Farez","Tec. Javier Quiguango","Tec. Wilson Quiguango","Tec. Manuel Vera","Tec. Carlos Jama"]
 OPCIONES_REPORTE = ["FUERA DE GARANTIA", "INFORME TECNICO", "RECLAMO AL PROVEEDOR"]
 
 # --- 3. MARCA DE AGUA ---
@@ -187,3 +187,4 @@ if st.button("💾 GENERAR REPORTE PDF", type="primary"):
         "observaciones": f_obs, "conclusiones": f_conclusiones
     }, lista_imgs_final)
     st.download_button("📥 DESCARGAR PDF", data=pdf_data, file_name=f"Informe_{orden_id}.pdf")
+
