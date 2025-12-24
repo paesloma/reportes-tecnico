@@ -68,7 +68,7 @@ def generar_pdf(datos, lista_imagenes_procesadas):
         img_logo.hAlign = 'LEFT'
         story.append(img_logo)
     
-    story.append(Paragraph("INFORME TÉCNICO DE SERVICIO", est_titulo))
+    story.append(Paragraph("INFORME TÉCNICO", est_titulo))
     story.append(Spacer(1, 15))
     
     # Lógica Factura/Stock
@@ -86,7 +86,7 @@ def generar_pdf(datos, lista_imagenes_procesadas):
 
     secciones = [
         ("1. Revisión Física", datos['rev_fisica']),
-        ("2. Ingresa a servicio técnico", datos['ingreso_tec']),
+        ("2. Observaciones ingreso a servicio tecnico", datos['ingreso_tec']),
         ("3. Revisión electro-electrónica-mecanica", datos['rev_electro']),
         ("4. Observaciones", datos['observaciones']),
         ("5. Conclusiones", datos['conclusiones'])
@@ -195,4 +195,5 @@ if st.button("💾 GENERAR REPORTE PDF", type="primary"):
         "observaciones": f_obs, "conclusiones": f_conclusiones
     }, lista_imgs_final)
     st.download_button("📥 DESCARGAR PDF", data=pdf_data, file_name=f"Informe_{orden_id}.pdf")
+
 
