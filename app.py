@@ -138,7 +138,7 @@ if orden_id and not df_db.empty:
 
 st.markdown("---")
 
-col1, col2 = st.columns(2)
+col1, col2= st.columns(2)
 with col1:
     tipo_rep = st.selectbox("Tipo de Reporte", options=OPCIONES_REPORTE)
     f_cliente = st.text_input("Cliente", value=c_v)
@@ -148,6 +148,8 @@ with col2:
     f_tecnico = st.selectbox("Técnico Asignado", options=LISTA_TECNICOS)
     f_fac = st.text_input("Factura", value=f_v)
     f_fec_fac = st.date_input("Fecha Factura", value=ff_v)
+    f_tecnico = st.selectbox("Realizado por", options=LISTA_SUPERVISOR)
+ 
 
 st.subheader("Detalles Técnicos")
 texto_rev_fisica = f"Ingresa a servicio técnico {f_prod}. Se observa el uso continuo del artículo."
@@ -188,6 +190,7 @@ if st.button("💾 GENERAR REPORTE PDF", type="primary"):
         "observaciones": f_obs, "conclusiones": f_conclusiones
     }, lista_imgs_final)
     st.download_button("📥 DESCARGAR PDF", data=pdf_data, file_name=f"Informe_{orden_id}.pdf")
+
 
 
 
