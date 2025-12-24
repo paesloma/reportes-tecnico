@@ -32,7 +32,7 @@ def cargar_datos_servicios():
 
 df_db = cargar_datos_servicios()
 # Listas de personal
-LISTA_TECNICOS = ["Tec. Juan Diego Quezada", "Tec. Xavier Ramon", "Tec. Santiago Farez"]
+LISTA_TECNICOS = ["Tec. Xavier Ramón", "Tec. Juan Diego Quezada", "Tec. Javier Quiguango", "Tec. Wilson Quiguango", "Tec. Carlos Jama", "Tec.Manuel Vera",  "Tec.Santiago Farez", "Tec.Juan Farez"]
 LISTA_REALIZADORES = ["Ing. Henry Beltran", "Ing. Christian Calle", "Ing.Guillermo Ortiz", "Ing.Pablo Lopez"]
 OPCIONES_REPORTE = ["FUERA DE GARANTIA", "INFORME TECNICO", "RECLAMO AL PROVEEDOR"]
 
@@ -195,6 +195,7 @@ if st.button("💾 GENERAR REPORTE PDF", type="primary"):
         "observaciones": f_obs, "conclusiones": f_conclusiones
     }, lista_imgs_final)
     st.download_button("📥 DESCARGAR PDF", data=pdf_data, file_name=f"Informe_{orden_id}.pdf")
+
 
 
 
