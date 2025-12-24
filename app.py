@@ -33,6 +33,7 @@ def cargar_datos_servicios():
 df_db = cargar_datos_servicios()
 LISTA_TECNICOS = ["Tec. Juan Diego Quezada", "Tec. Xavier Ramon", "Tec. Santiago Farez","Tec. Javier Quiguango","Tec. Wilson Quiguango","Tec. Manuel Vera","Tec. Carlos Jama"]
 OPCIONES_REPORTE = ["FUERA DE GARANTIA", "INFORME TECNICO", "RECLAMO AL PROVEEDOR"]
+LISTA_SUPERVISOR =["Ing. Henry Beltral","Ing. Christian Calle","Ing. Guillermo Ortiz", "Ing. Pablo Lopez"]
 
 # --- 3. MARCA DE AGUA ---
 def agregar_marca_agua(canvas, doc):
@@ -187,5 +188,6 @@ if st.button("💾 GENERAR REPORTE PDF", type="primary"):
         "observaciones": f_obs, "conclusiones": f_conclusiones
     }, lista_imgs_final)
     st.download_button("📥 DESCARGAR PDF", data=pdf_data, file_name=f"Informe_{orden_id}.pdf")
+
 
 
