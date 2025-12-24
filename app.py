@@ -31,9 +31,10 @@ def cargar_datos_servicios():
     return pd.DataFrame(columns=['Orden', 'Cliente', 'Serie', 'Producto', 'Fec_Fac_Min', 'Fac_Min'])
 
 df_db = cargar_datos_servicios()
-LISTA_TECNICOS = ["Tec. Juan Diego Quezada", "Tec. Xavier Ramon", "Tec. Santiago Farez","Tec. Javier Quiguango","Tec. Wilson Quiguango","Tec. Manuel Vera","Tec. Carlos Jama"]
+# Listas de personal
+LISTA_TECNICOS = ["Tec. Juan Diego Quezada", "Tec. Xavier Ramon", "Tec. Santiago Farez"]
+LISTA_REALIZADORES = ["Ing. Henry Beltran", "Tec. Juan Diego Quezada", "Tec. Xavier Ramon", "Tec. Santiago Farez"]
 OPCIONES_REPORTE = ["FUERA DE GARANTIA", "INFORME TECNICO", "RECLAMO AL PROVEEDOR"]
-LISTA_SUPERVISOR =["Ing. Henry Beltral","Ing. Christian Calle","Ing. Guillermo Ortiz", "Ing. Pablo Lopez"]
 
 # --- 3. MARCA DE AGUA ---
 def agregar_marca_agua(canvas, doc):
@@ -51,7 +52,6 @@ def generar_pdf(datos, lista_imagenes_procesadas):
     buffer = BytesIO()
     doc = SimpleDocTemplate(buffer, pagesize=letter, topMargin=0.4*inch, bottomMargin=0.4*inch, leftMargin=0.5*inch, rightMargin=0.5*inch)
     
-    # NUEVO COLOR DE RELLENO SOLICITADO
     color_azul_institucional = colors.HexColor("#0056b3")
 
     est_titulo = ParagraphStyle('T', fontSize=16, alignment=1, fontName='Helvetica-Bold', textColor=color_azul_institucional)
@@ -71,14 +71,14 @@ def generar_pdf(datos, lista_imagenes_procesadas):
     story.append(Paragraph("INFORME TÉCNICO DE SERVICIO", est_titulo))
     story.append(Spacer(1, 15))
     
-    # Ajuste de Factura/Stock
+    # Lógica Factura/Stock
     factura_texto = "STOCK" if str(datos['factura']).strip() == "0" else datos['factura']
 
     info = [
         [Paragraph(f"<b>Orden:</b> {datos['orden']}", est_txt), Paragraph(f"<b>Factura:</b> {factura_texto}", est_txt)],
         [Paragraph(f"<b>Cliente:</b> {datos['cliente']}", est_txt), Paragraph(f"<b>Fec. Factura:</b> {datos['fecha_factura']}", est_txt)],
         [Paragraph(f"<b>Producto:</b> {datos['producto']}", est_txt), Paragraph(f"<b>Serie:</b> {datos['serie']}", est_txt)],
-        [Paragraph(f"<b>Técnico:</b> {datos['tecnico']}", est_txt), Paragraph(f"<b>Fecha Reporte:</b> {datos['fecha_hoy']}", est_txt)]
+        [Paragraph(f"<b>Realizado por:</b> {datos['realizador']}", est_txt), Paragraph(f"<b>Fecha Reporte:</b> {datos['fecha_hoy']}", est_txt)]
     ]
     t = Table(info, colWidths=[3.7*inch, 3.7*inch])
     t.setStyle(TableStyle([('GRID', (0,0), (-1,-1), 0.5, colors.lightgrey), ('VALIGN', (0,0), (-1,-1), 'MIDDLE')]))
@@ -86,7 +86,7 @@ def generar_pdf(datos, lista_imagenes_procesadas):
 
     secciones = [
         ("1. Revisión Física", datos['rev_fisica']),
-        ("2. Observaciones de ingreso", datos['ingreso_tec']),
+        ("2. Ingresa a servicio técnico", datos['ingreso_tec']),
         ("3. Revisión electro-electrónica-mecanica", datos['rev_electro']),
         ("4. Observaciones", datos['observaciones']),
         ("5. Conclusiones", datos['conclusiones'])
@@ -97,6 +97,7 @@ def generar_pdf(datos, lista_imagenes_procesadas):
         story.append(Paragraph(contenido.replace('\n', '<br/>'), est_txt))
         story.append(Spacer(1, 5))
 
+    # Imágenes
     if lista_imagenes_procesadas:
         story.append(Paragraph("EVIDENCIA DE IMÁGENES", est_sec))
         story.append(Spacer(1, 10))
@@ -109,10 +110,15 @@ def generar_pdf(datos, lista_imagenes_procesadas):
         t_fotos.setStyle(TableStyle([('VALIGN', (0,0), (-1,-1), 'MIDDLE'), ('BOTTOMPADDING', (0,0), (-1,-1), 12)]))
         story.append(t_fotos)
 
-    # SECCIÓN DE FIRMA (SIN RAYA SUPERIOR)
+    # SECCIÓN DE DOBLE FIRMA (SIN RAYAS)
     story.append(Spacer(1, 60))
-    story.append(Paragraph("Revisado por:", est_firma))
-    story.append(Paragraph(datos['tecnico'], est_firma))
+    firmas_data = [
+        [Paragraph("Realizado por:", est_firma), Paragraph("Revisado por:", est_firma)],
+        [Paragraph(datos['realizador'], est_firma), Paragraph(datos['tecnico'], est_firma)]
+    ]
+    t_firmas = Table(firmas_data, colWidths=[3.7*inch, 3.7*inch])
+    t_firmas.setStyle(TableStyle([('VALIGN', (0,0), (-1,-1), 'TOP')]))
+    story.append(t_firmas)
 
     doc.build(story, onFirstPage=agregar_marca_agua, onLaterPages=agregar_marca_agua)
     buffer.seek(0)
@@ -138,18 +144,17 @@ if orden_id and not df_db.empty:
 
 st.markdown("---")
 
-col1, col2= st.columns(2)
+col1, col2 = st.columns(2)
 with col1:
     tipo_rep = st.selectbox("Tipo de Reporte", options=OPCIONES_REPORTE)
+    f_realizador = st.selectbox("Realizado por", options=LISTA_REALIZADORES) # Nueva lista con Henry Beltran
     f_cliente = st.text_input("Cliente", value=c_v)
     f_prod = st.text_input("Producto", value=p_v)
-    f_serie = st.text_input("Serie/Artículo", value=s_v)
 with col2:
-    f_tecnico = st.selectbox("Técnico Asignado", options=LISTA_TECNICOS)
+    f_tecnico = st.selectbox("Revisado por (Técnico)", options=LISTA_TECNICOS)
     f_fac = st.text_input("Factura", value=f_v)
     f_fec_fac = st.date_input("Fecha Factura", value=ff_v)
-    f_tecnico = st.selectbox("Realizado por", options=LISTA_SUPERVISOR)
- 
+    f_serie = st.text_input("Serie/Artículo", value=s_v)
 
 st.subheader("Detalles Técnicos")
 texto_rev_fisica = f"Ingresa a servicio técnico {f_prod}. Se observa el uso continuo del artículo."
@@ -185,12 +190,8 @@ if st.button("💾 GENERAR REPORTE PDF", type="primary"):
     pdf_data = generar_pdf({
         "orden": orden_id, "cliente": f_cliente, "factura": f_fac, 
         "fecha_factura": f_fec_fac, "producto": f_prod, "serie": f_serie, 
-        "tecnico": f_tecnico, "fecha_hoy": date.today(), "rev_fisica": f_rev_fisica, 
-        "ingreso_tec": f_ingreso_tec, "rev_electro": f_rev_electro, 
+        "tecnico": f_tecnico, "realizador": f_realizador, "fecha_hoy": date.today(), 
+        "rev_fisica": f_rev_fisica, "ingreso_tec": f_ingreso_tec, "rev_electro": f_rev_electro, 
         "observaciones": f_obs, "conclusiones": f_conclusiones
     }, lista_imgs_final)
     st.download_button("📥 DESCARGAR PDF", data=pdf_data, file_name=f"Informe_{orden_id}.pdf")
-
-
-
-
