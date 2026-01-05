@@ -35,8 +35,15 @@ def cargar_datos_servicios():
     return pd.DataFrame(columns=['Orden', 'Cliente', 'Serie', 'Producto', 'Fec_Fac_Min', 'Fac_Min'])
 
 df_db = cargar_datos_servicios()
-LISTA_TECNICOS = ["Tec. Juan Diego Quezada", "Tec. Xavier Ramon", "Tec. Santiago Farez"]
-LISTA_REALIZADORES = ["Ing. Henry Beltran", "Tec. Juan Diego Quezada", "Tec. Xavier Ramon", "Tec. Santiago Farez"]
+LISTA_TECNICOS = ["Tec. Xavier Ramón",
+    "Tec. Juan Diego Quezada",
+    "Tec. Javier Quiguango",
+    "Tec. Wilson Quiguango",
+    "Tec. Carlos Jama",
+    "Tec. Manuel Vera",
+    "Tec. Juan Farez",
+    "Tec. Santiago Farez"]
+LISTA_REALIZADORES = ["Ing. Henry Beltran", "Ing. Pablo Lopez ", "Ing. Christian Calle", "Ing. Guillermo Ortiz"]
 OPCIONES_REPORTE = ["FUERA DE GARANTIA", "INFORME TECNICO", "RECLAMO AL PROVEEDOR"]
 
 # --- 3. FUNCIONES DE GENERACIÓN ---
@@ -193,3 +200,4 @@ if st.session_state.pdf_data is not None:
         st.download_button("📥 DESCARGAR PDF", data=st.session_state.pdf_data, file_name=f"Informe_{orden_id}.pdf", mime="application/pdf", use_container_width=True)
     with c2:
         st.download_button("📥 DESCARGAR TXT", data=st.session_state.txt_data, file_name=f"Status_{orden_id}.txt", mime="text/plain", use_container_width=True)
+
