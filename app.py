@@ -15,13 +15,10 @@ from reportlab.lib import colors
 # --- 1. CONFIGURACIÓN Y PERSISTENCIA ---
 st.set_page_config(page_title="Generador de Reportes", page_icon="🔧", layout="centered")
 
-# Inicializar contenedores en la sesión para que no se borren
 if 'pdf_data' not in st.session_state:
     st.session_state.pdf_data = None
 if 'txt_data' not in st.session_state:
     st.session_state.txt_data = None
-if 'nombre_orden' not in st.session_state:
-    st.session_state.nombre_orden = "reporte"
 
 # --- 2. CARGA DE DATOS ---
 @st.cache_data
@@ -43,22 +40,46 @@ LISTA_REALIZADORES = ["Ing. Henry Beltran", "Tec. Juan Diego Quezada", "Tec. Xav
 OPCIONES_REPORTE = ["FUERA DE GARANTIA", "INFORME TECNICO", "RECLAMO AL PROVEEDOR"]
 
 # --- 3. FUNCIONES DE GENERACIÓN ---
+def agregar_marca_agua(canvas, doc):
+    watermark_file = "watermark.png" #
+    if os.path.exists(watermark_file):
+        canvas.saveState()
+        canvas.setFillAlpha(0.12)
+        canvas.drawImage(watermark_file, 0, 0, width=canvas._pagesize[0], height=canvas._pagesize[1], mask='auto', preserveAspectRatio=True, anchor='c')
+        canvas.restoreState()
+
 def generar_pdf(datos, lista_imgs):
     buffer = BytesIO()
     doc = SimpleDocTemplate(buffer, pagesize=letter, topMargin=0.4*inch, bottomMargin=0.4*inch, leftMargin=0.5*inch, rightMargin=0.5*inch)
     color_azul = colors.HexColor("#0056b3") #
     
+    est_titulo = ParagraphStyle('T', fontSize=16, alignment=1, fontName='Helvetica-Bold', textColor=color_azul)
     est_sec = ParagraphStyle('S', fontSize=10, fontName='Helvetica-Bold', textColor=colors.white, backColor=color_azul, borderPadding=2, spaceBefore=8)
     est_txt = ParagraphStyle('TXT', fontSize=9, fontName='Helvetica', leading=11)
     est_firma = ParagraphStyle('F', fontSize=10, fontName='Helvetica-Bold', alignment=1)
     
     story = []
-    if os.path.exists("logo.png"):
-        img = Image("logo.png", width=1.4*inch, height=0.55*inch)
-        img.hAlign = 'LEFT'
-        story.append(img)
+
+    # --- CABECERA CON DOS LOGOS ---
+    logo_izq_path = "logo.png"
+    logo_der_path = "logo_derecho.png"
     
-    story.append(Paragraph("INFORME TÉCNICO DE SERVICIO", ParagraphStyle('T', fontSize=16, alignment=1, fontName='Helvetica-Bold', textColor=color_azul)))
+    col_izq = []
+    if os.path.exists(logo_izq_path):
+        col_izq.append(Image(logo_izq_path, width=1.4*inch, height=0.55*inch))
+    
+    col_der = []
+    if os.path.exists(logo_der_path):
+        img_der = Image(logo_der_path, width=1.4*inch, height=0.55*inch)
+        img_der.hAlign = 'RIGHT'
+        col_der.append(img_der)
+
+    header_table = Table([[col_izq, col_der]], colWidths=[3.7*inch, 3.7*inch])
+    header_table.setStyle(TableStyle([('VALIGN', (0,0), (-1,-1), 'TOP'), ('ALIGN', (1,0), (1,0), 'RIGHT')]))
+    story.append(header_table)
+    
+    story.append(Spacer(1, 10))
+    story.append(Paragraph("INFORME TÉCNICO DE SERVICIO", est_titulo))
     story.append(Spacer(1, 15))
     
     fac_txt = "STOCK" if str(datos['factura']).strip() == "0" else datos['factura'] #
@@ -73,9 +94,15 @@ def generar_pdf(datos, lista_imgs):
     t.setStyle(TableStyle([('GRID', (0,0), (-1,-1), 0.5, colors.lightgrey), ('VALIGN', (0,0), (-1,-1), 'MIDDLE')]))
     story.append(t)
 
-    for tit, cont in [("1. Revisión Física", datos['rev_fisica']), ("2. Ingresa a servicio técnico", datos['ingreso_tec']), 
-                       ("3. Revisión electro-electrónica-mecanica", datos['rev_electro']), ("4. Observaciones", datos['observaciones']), 
-                       ("5. Conclusiones", datos['conclusiones'])]:
+    secciones = [
+        ("1. Revisión Física", datos['rev_fisica']),
+        ("2. Ingresa a servicio técnico", datos['ingreso_tec']), 
+        ("3. Revisión electro-electrónica-mecanica", datos['rev_electro']), 
+        ("4. Observaciones", datos['observaciones']), 
+        ("5. Conclusiones", datos['conclusiones'])
+    ]
+
+    for tit, cont in secciones:
         story.append(Paragraph(tit, est_sec))
         story.append(Paragraph(cont.replace('\n', '<br/>'), est_txt))
         story.append(Spacer(1, 5))
@@ -94,7 +121,7 @@ def generar_pdf(datos, lista_imgs):
                       [Paragraph(datos['realizador'], est_firma), Paragraph(datos['tecnico'], est_firma)]], colWidths=[3.7*inch, 3.7*inch])
     story.append(t_firmas)
     
-    doc.build(story)
+    doc.build(story, onFirstPage=agregar_marca_agua, onLaterPages=agregar_marca_agua)
     buffer.seek(0)
     return buffer.read()
 
@@ -105,7 +132,6 @@ def generar_txt_contenido(datos):
 # --- 4. INTERFAZ ---
 st.title("🚀 Gestión de Reportes Técnicos")
 
-# BUSCADOR FUERA DEL FORMULARIO
 orden_id = st.text_input("Ingrese número de Orden")
 c_v, s_v, p_v, f_v, ff_v = "", "", "", "", date.today()
 
@@ -116,14 +142,12 @@ if orden_id:
         c_v, s_v, p_v, f_v = row.get('Cliente',''), row.get('Serie',''), row.get('Producto',''), row.get('Fac_Min','')
         try: ff_v = pd.to_datetime(str(row.get('Fec_Fac_Min',''))).date()
         except: pass
-        st.success("✅ Datos de la orden cargados.")
 
-# FORMULARIO PARA EVITAR RECARGAS ACCIDENTALES
 with st.form("form_reporte"):
     col1, col2 = st.columns(2)
     with col1:
         tipo_rep = st.selectbox("Tipo de Reporte", options=OPCIONES_REPORTE)
-        f_realizador = st.selectbox("Realizado por", options=LISTA_REALIZADORES) # Incluye Henry Beltran
+        f_realizador = st.selectbox("Realizado por", options=LISTA_REALIZADORES)
         f_cliente = st.text_input("Cliente", value=c_v)
         f_prod = st.text_input("Producto", value=p_v)
     with col2:
@@ -137,14 +161,11 @@ with st.form("form_reporte"):
     f_rev_electro = st.text_area("3. Revisión electro-electrónica-mecanica", value="Se procede a revisar el sistema de alimentación de energía y sus líneas de conexión.\nSe procede a revisar el sistema electrónico del equipo.")
     f_obs = st.text_area("4. Observaciones", value="Luego de la revisión del artículo se observa lo siguiente: ")
     f_concl = st.text_area("5. Conclusiones")
-
     uploaded_files = st.file_uploader("Subir imágenes", type=['jpg','png','jpeg'], accept_multiple_files=True)
     
-    # Botón de Generación dentro del Formulario
     submit = st.form_submit_button("💾 GENERAR ARCHIVOS", use_container_width=True)
 
 if submit:
-    # Procesar imágenes
     lista_imgs_final = []
     if uploaded_files:
         for file in uploaded_files:
@@ -162,30 +183,13 @@ if submit:
         "rev_electro": f_rev_electro, "observaciones": f_obs, "conclusiones": f_concl, "tipo_reporte": tipo_rep
     }
 
-    # Guardar en session_state para que los botones de descarga funcionen
     st.session_state.pdf_data = generar_pdf(datos, lista_imgs_final)
     st.session_state.txt_data = generar_txt_contenido(datos)
-    st.session_state.nombre_orden = orden_id if orden_id else "reporte"
 
-# --- 5. MOSTRAR BOTONES DE DESCARGA (Fuera del formulario) ---
 if st.session_state.pdf_data is not None:
     st.markdown("---")
-    st.success("✅ ¡Archivos listos!")
     c1, c2 = st.columns(2)
     with c1:
-        st.download_button(
-            label="📥 DESCARGAR PDF",
-            data=st.session_state.pdf_data,
-            file_name=f"Informe_{st.session_state.nombre_orden}.pdf",
-            mime="application/pdf",
-            use_container_width=True
-        )
+        st.download_button("📥 DESCARGAR PDF", data=st.session_state.pdf_data, file_name=f"Informe_{orden_id}.pdf", mime="application/pdf", use_container_width=True)
     with c2:
-        st.download_button(
-            label="📥 DESCARGAR TXT",
-            data=st.session_state.txt_data,
-            file_name=f"Status_{st.session_state.nombre_orden}.txt",
-            mime="text/plain",
-            use_container_width=True
-        )
-    st.text_area("Copia rápida del TXT:", value=st.session_state.txt_data, height=200)
+        st.download_button("📥 DESCARGAR TXT", data=st.session_state.txt_data, file_name=f"Status_{orden_id}.txt", mime="text/plain", use_container_width=True)
