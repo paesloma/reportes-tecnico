@@ -51,11 +51,11 @@ def generar_pdf(datos, lista_imagenes_procesadas):
     buffer = BytesIO()
     doc = SimpleDocTemplate(buffer, pagesize=letter, topMargin=0.4*inch, bottomMargin=0.4*inch, leftMargin=0.5*inch, rightMargin=0.5*inch)
     
-    color_azul_institucional = colors.HexColor("#0056b3") #
+    color_azul_institucional = colors.HexColor("#0056b3")
 
     est_titulo = ParagraphStyle('T', fontSize=16, alignment=1, fontName='Helvetica-Bold', textColor=color_azul_institucional)
     est_sec = ParagraphStyle('S', fontSize=10, fontName='Helvetica-Bold', textColor=colors.white, 
-                            backColor=color_azul_institucional, borderPadding=2, spaceBefore=8) #
+                            backColor=color_azul_institucional, borderPadding=2, spaceBefore=8)
     est_txt = ParagraphStyle('TXT', fontSize=9, fontName='Helvetica', leading=11)
     est_firma = ParagraphStyle('F', fontSize=10, fontName='Helvetica-Bold', alignment=1)
 
@@ -69,7 +69,7 @@ def generar_pdf(datos, lista_imagenes_procesadas):
     story.append(Paragraph("INFORME TÉCNICO DE SERVICIO", est_titulo))
     story.append(Spacer(1, 15))
     
-    factura_texto = "STOCK" if str(datos['factura']).strip() == "0" else datos['factura'] #
+    factura_texto = "STOCK" if str(datos['factura']).strip() == "0" else datos['factura']
 
     info = [
         [Paragraph(f"<b>Orden:</b> {datos['orden']}", est_txt), Paragraph(f"<b>Factura:</b> {factura_texto}", est_txt)],
@@ -110,7 +110,7 @@ def generar_pdf(datos, lista_imagenes_procesadas):
     firmas_data = [
         [Paragraph("Realizado por:", est_firma), Paragraph("Revisado por:", est_firma)],
         [Paragraph(datos['realizador'], est_firma), Paragraph(datos['tecnico'], est_firma)]
-    ] #
+    ]
     t_firmas = Table(firmas_data, colWidths=[3.7*inch, 3.7*inch])
     t_firmas.setStyle(TableStyle([('VALIGN', (0,0), (-1,-1), 'TOP')]))
     story.append(t_firmas)
@@ -121,8 +121,7 @@ def generar_pdf(datos, lista_imagenes_procesadas):
 
 # --- 5. FUNCIÓN GENERAR TXT ---
 def generar_txt(datos):
-    factura_texto = "STOCK" if str(datos['factura']).strip() == "0" else datos['factura'] #
-    
+    factura_texto = "STOCK" if str(datos['factura']).strip() == "0" else datos['factura']
     contenido = f"""Estimados
 
 Me dirijo a para indicar el status de estado de la garantia del siguiente producto
@@ -176,7 +175,7 @@ with col2:
     f_serie = st.text_input("Serie/Artículo", value=s_v)
 
 st.subheader("Detalles Técnicos")
-texto_rev_fisica = f"Ingresa a servicio técnico {f_prod}. Se observa el uso continuo del artículo." #
+texto_rev_fisica = f"Ingresa a servicio técnico {f_prod}. Se observa el uso continuo del artículo."
 f_rev_fisica = st.text_area("1. Revisión Física", value=texto_rev_fisica)
 f_ingreso_tec = st.text_area("2. Ingresa a servicio técnico")
 f_rev_electro = st.text_area("3. Revisión electro-electrónica-mecanica", value="Se procede a revisar el sistema de alimentación de energía y sus líneas de conexión.\nSe procede a revisar el sistema electrónico del equipo.")
@@ -205,24 +204,31 @@ if uploaded_files:
         img_byte.seek(0)
         lista_imgs_final.append({"imagen": img_byte, "descripcion": desc if desc else "Sin descripción."})
 
-# --- BOTONES DE GENERACIÓN ---
-col_pdf, col_txt = st.columns(2)
-
-datos_comunes = {
-    "orden": orden_id, "cliente": f_cliente, "factura": f_fac, 
-    "fecha_factura": f_fec_fac, "producto": f_prod, "serie": f_serie, 
-    "tecnico": f_tecnico, "realizador": f_realizador, "fecha_hoy": date.today(), 
-    "rev_fisica": f_rev_fisica, "ingreso_tec": f_ingreso_tec, "rev_electro": f_rev_electro, 
-    "observaciones": f_obs, "conclusiones": f_conclusiones, "tipo_reporte": tipo_rep
-}
-
-with col_pdf:
-    if st.button("💾 GENERAR PDF", type="primary", use_container_width=True):
+# --- LÓGICA DE BOTONES ---
+if st.button("💾 GENERAR REPORTE", type="primary", use_container_width=True):
+    if f_cliente:
+        datos_comunes = {
+            "orden": orden_id, "cliente": f_cliente, "factura": f_fac, 
+            "fecha_factura": f_fec_fac, "producto": f_prod, "serie": f_serie, 
+            "tecnico": f_tecnico, "realizador": f_realizador, "fecha_hoy": date.today(), 
+            "rev_fisica": f_rev_fisica, "ingreso_tec": f_ingreso_tec, "rev_electro": f_rev_electro, 
+            "observaciones": f_obs, "conclusiones": f_conclusiones, "tipo_reporte": tipo_rep
+        }
+        
+        # Generamos ambos archivos
         pdf_data = generar_pdf(datos_comunes, lista_imgs_final)
-        st.download_button("📥 DESCARGAR PDF", data=pdf_data, file_name=f"Informe_{orden_id}.pdf", use_container_width=True)
-
-with col_txt:
-    if st.button("📄 GENERAR TXT (COPIAR)", use_container_width=True):
-        txt_contenido = generar_txt(datos_comunes)
-        st.download_button("📥 DESCARGAR TXT", data=txt_contenido, file_name=f"Status_{orden_id}.txt", use_container_width=True)
-        st.text_area("Copia el texto aquí:", value=txt_contenido, height=300)
+        txt_data = generar_txt(datos_comunes)
+        
+        st.success("✅ Archivos listos para descargar")
+        
+        # Mostramos los dos botones de descarga
+        col_d1, col_d2 = st.columns(2)
+        with col_d1:
+            st.download_button("📥 DESCARGAR PDF", data=pdf_data, file_name=f"Informe_{orden_id}.pdf", use_container_width=True)
+        with col_d2:
+            st.download_button("📥 DESCARGAR TXT", data=txt_data, file_name=f"Status_{orden_id}.txt", use_container_width=True)
+            
+        # Opcional: Mostrar el texto para copiar rápido
+        st.text_area("Copia el texto aquí:", value=txt_data, height=200)
+    else:
+        st.error("⚠️ Complete los datos del cliente.")
