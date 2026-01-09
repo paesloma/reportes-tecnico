@@ -143,9 +143,27 @@ def generar_pdf(datos, lista_imgs):
     return buffer.read()
 
 def generar_txt_contenido(datos):
+    # Formateo de la factura si es 0
     fac_txt = "STOCK" if str(datos['factura']).strip() == "0" else datos['factura']
-    return f"""Estimados\n\nMe dirijo a para indicar el status de estado de la garantia del siguiente producto\n\nCLIENTE: {datos['cliente']}\nFACTURA: {fac_txt}\nFECHA: {datos['fecha_factura']}\nORDEN: {datos['orden']}\nCODIGO: {datos['serie']}\nDESCRIPCION: {datos['producto']}\n\nOBSERVACION: {datos['tipo_reporte']}\n\nDETALLES:\n{datos['observaciones']}\n\nAgradecido a la atención de la presente\nAtentamente {datos['LISTA_REALIZADORES']}\nIng. Pablo Lopez\nCoordinador Postventa Hamilton Beach\n0995115782"""
-
+    
+    # Construcción del mensaje
+    return (
+        f"Estimados\n\n"
+        f"Me dirijo a usted para indicar el status de estado de la garantía del siguiente producto:\n\n"
+        f"CLIENTE: {datos['cliente']}\n"
+        f"FACTURA: {fac_txt}\n"
+        f"FECHA DE FACTURA: {datos['fecha_factura']}\n"
+        f"ORDEN DE SERVICIO: {datos['orden']}\n"
+        f"SERIE/CÓDIGO: {datos['serie']}\n"
+        f"PRODUCTO: {datos['producto']}\n"
+        f"TÉCNICO ASIGNADO: {datos['tecnico']}\n\n" # <--- Se agregó el técnico
+        f"TIPO DE REPORTE: {datos['tipo_reporte']}\n\n"
+        f"CONCLUSIONES:\n{datos['conclusiones']}\n\n" # <--- Usa las conclusiones dinámicas
+        f"Agradecido a la atención de la presente.\n\n"
+        f"Atentamente,\n"
+        f"{datos['realizador']}\n" # <--- Aquí corregimos el error (usamos la selección, no la lista)
+        f"Coordinador Postventa"
+    )
 # --- 4. INTERFAZ ---
 st.title("🚀 Gestión de Reportes Técnicos")
 
@@ -242,4 +260,5 @@ if st.session_state.pdf_data is not None:
         st.download_button("Descargar PDF", data=st.session_state.pdf_data, file_name=f"Informe_{orden_id}.pdf", mime="application/pdf", use_container_width=True)
     with c2:
         st.download_button("Descargar TXT", data=st.session_state.txt_data, file_name=f"Status_{orden_id}.txt", mime="text/plain", use_container_width=True)
+
 
