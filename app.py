@@ -2,7 +2,7 @@ import streamlit as st
 import pandas as pd
 from datetime import date
 from io import BytesIO
-from PIL import Image as PilImage 
+from PIL import Image as PilImage
 import os
 
 # Importaciones de ReportLab
@@ -35,20 +35,19 @@ def cargar_datos_servicios():
     return pd.DataFrame(columns=['Orden', 'Cliente', 'Serie', 'Producto', 'Fec_Fac_Min', 'Fac_Min'])
 
 df_db = cargar_datos_servicios()
-LISTA_TECNICOS = ["Tec. Xavier Ramón",
-    "Tec. Juan Diego Quezada",
-    "Tec. Javier Quiguango",
-    "Tec. Wilson Quiguango",
-    "Tec. Carlos Jama",
-    "Tec. Manuel Vera",
-    "Tec. Juan Farez",
-    "Tec. Santiago Farez"]
+
+# Listas de personal (Tal cual tu código original)
+LISTA_TECNICOS = [
+    "Tec. Xavier Ramón", "Tec. Juan Diego Quezada", "Tec. Javier Quiguango",
+    "Tec. Wilson Quiguango", "Tec. Carlos Jama", "Tec. Manuel Vera",
+    "Tec. Juan Farez", "Tec. Santiago Farez"
+]
 LISTA_REALIZADORES = ["Ing. Henry Beltran", "Ing. Pablo Lopez ", "Ing. Christian Calle", "Ing. Guillermo Ortiz"]
 OPCIONES_REPORTE = ["FUERA DE GARANTIA", "INFORME TECNICO", "RECLAMO AL PROVEEDOR"]
 
 # --- 3. FUNCIONES DE GENERACIÓN ---
 def agregar_marca_agua(canvas, doc):
-    watermark_file = "watermark.png" #
+    watermark_file = "watermark.png"
     if os.path.exists(watermark_file):
         canvas.saveState()
         canvas.setFillAlpha(0.12)
@@ -58,7 +57,7 @@ def agregar_marca_agua(canvas, doc):
 def generar_pdf(datos, lista_imgs):
     buffer = BytesIO()
     doc = SimpleDocTemplate(buffer, pagesize=letter, topMargin=0.4*inch, bottomMargin=0.4*inch, leftMargin=0.5*inch, rightMargin=0.5*inch)
-    color_azul = colors.HexColor("#0056b3") #
+    color_azul = colors.HexColor("#0056b3")
     
     est_titulo = ParagraphStyle('T', fontSize=16, alignment=1, fontName='Helvetica-Bold', textColor=color_azul)
     est_sec = ParagraphStyle('S', fontSize=10, fontName='Helvetica-Bold', textColor=colors.white, backColor=color_azul, borderPadding=2, spaceBefore=8)
@@ -67,7 +66,7 @@ def generar_pdf(datos, lista_imgs):
     
     story = []
 
-    # --- CABECERA CON DOS LOGOS ---
+    # --- CABECERA ---
     logo_izq_path = "logo.png"
     logo_der_path = "logo_derecho.png"
     
@@ -89,7 +88,7 @@ def generar_pdf(datos, lista_imgs):
     story.append(Paragraph("INFORME TÉCNICO DE SERVICIO", est_titulo))
     story.append(Spacer(1, 15))
     
-    fac_txt = "STOCK" if str(datos['factura']).strip() == "0" else datos['factura'] #
+    fac_txt = "STOCK" if str(datos['factura']).strip() == "0" else datos['factura']
     
     info = [
         [Paragraph(f"<b>Orden:</b> {datos['orden']}", est_txt), Paragraph(f"<b>Factura:</b> {fac_txt}", est_txt)],
@@ -114,16 +113,21 @@ def generar_pdf(datos, lista_imgs):
         story.append(Paragraph(cont.replace('\n', '<br/>'), est_txt))
         story.append(Spacer(1, 5))
 
+    # --- LÓGICA DE IMÁGENES ---
     if lista_imgs:
         story.append(Paragraph("EVIDENCIA DE IMÁGENES", est_sec))
         for idx, i in enumerate(lista_imgs):
             story.append(Spacer(1, 10))
-            img_obj = Image(i['imagen'], width=2.4*inch, height=1.7*inch)
-            t_img = Table([[img_obj, Paragraph(f"<b>Imagen #{idx+1}:</b><br/>{i['descripcion']}", est_txt)]], colWidths=[2.6*inch, 4.6*inch])
-            story.append(t_img)
+            try:
+                # Intentamos cargar la imagen
+                img_obj = Image(i['imagen'], width=2.4*inch, height=1.7*inch)
+                desc_texto = i['descripcion']
+                t_img = Table([[img_obj, Paragraph(f"<b>Imagen #{idx+1}:</b><br/>{desc_texto}", est_txt)]], colWidths=[2.6*inch, 4.6*inch])
+                story.append(t_img)
+            except Exception as e:
+                story.append(Paragraph(f"Error cargando imagen {idx+1}", est_txt))
 
     story.append(Spacer(1, 60))
-    # Doble firma sin raya
     t_firmas = Table([[Paragraph("Realizado por:", est_firma), Paragraph("Revisado por:", est_firma)], 
                       [Paragraph(datos['realizador'], est_firma), Paragraph(datos['tecnico'], est_firma)]], colWidths=[3.7*inch, 3.7*inch])
     story.append(t_firmas)
@@ -150,38 +154,64 @@ if orden_id:
         try: ff_v = pd.to_datetime(str(row.get('Fec_Fac_Min',''))).date()
         except: pass
 
-with st.form("form_reporte"):
-    col1, col2 = st.columns(2)
-    with col1:
-        tipo_rep = st.selectbox("Tipo de Reporte", options=OPCIONES_REPORTE)
-        f_realizador = st.selectbox("Realizado por", options=LISTA_REALIZADORES)
-        f_cliente = st.text_input("Cliente", value=c_v)
-        f_prod = st.text_input("Producto", value=p_v)
-    with col2:
-        f_tecnico = st.selectbox("Revisado por (Técnico)", options=LISTA_TECNICOS)
-        f_fac = st.text_input("Factura", value=f_v)
-        f_fec_fac = st.date_input("Fecha Factura", value=ff_v)
-        f_serie = st.text_input("Serie/Artículo", value=s_v)
+# --- FORMULARIO (Sin st.form para permitir interactividad en imágenes) ---
+st.markdown("### Datos del Reporte")
+col1, col2 = st.columns(2)
+with col1:
+    tipo_rep = st.selectbox("Tipo de Reporte", options=OPCIONES_REPORTE)
+    f_realizador = st.selectbox("Realizado por", options=LISTA_REALIZADORES)
+    f_cliente = st.text_input("Cliente", value=c_v)
+    f_prod = st.text_input("Producto", value=p_v)
+with col2:
+    f_tecnico = st.selectbox("Revisado por (Técnico)", options=LISTA_TECNICOS)
+    f_fac = st.text_input("Factura", value=f_v)
+    f_fec_fac = st.date_input("Fecha Factura", value=ff_v)
+    f_serie = st.text_input("Serie/Artículo", value=s_v)
 
-    f_rev_fisica = st.text_area("1. Revisión Física", value=f"Ingresa a servicio técnico {f_prod}. Se observa el uso continuo del artículo.")
-    f_ingreso_tec = st.text_area("2. Ingresa a servicio técnico")
-    f_rev_electro = st.text_area("3. Revisión electro-electrónica-mecanica", value="Se procede a revisar el sistema de alimentación de energía y sus líneas de conexión.\nSe procede a revisar el sistema electrónico del equipo.")
-    f_obs = st.text_area("4. Observaciones", value="Luego de la revisión del artículo se observa lo siguiente: ")
-    f_concl = st.text_area("5. Conclusiones")
-    uploaded_files = st.file_uploader("Subir imágenes", type=['jpg','png','jpeg'], accept_multiple_files=True)
-    
-    submit = st.form_submit_button("💾 GENERAR ARCHIVOS", use_container_width=True)
+f_rev_fisica = st.text_area("1. Revisión Física", value=f"Ingresa a servicio técnico {f_prod}. Se observa el uso continuo del artículo.")
+f_ingreso_tec = st.text_area("2. Ingresa a servicio técnico")
+f_rev_electro = st.text_area("3. Revisión electro-electrónica-mecanica", value="Se procede a revisar el sistema de alimentación de energía y sus líneas de conexión.\nSe procede a revisar el sistema electrónico del equipo.")
+f_obs = st.text_area("4. Observaciones", value="Luego de la revisión del artículo se observa lo siguiente: ")
+f_concl = st.text_area("5. Conclusiones")
 
-if submit:
+# --- SECCIÓN DE IMÁGENES INTERACTIVA ---
+st.markdown("---")
+st.markdown("### 📸 Evidencia Fotográfica")
+uploaded_files = st.file_uploader("Subir imágenes", type=['jpg','png','jpeg'], accept_multiple_files=True)
+
+descripciones_capturadas = [] 
+
+if uploaded_files:
+    st.info("📝 Edita la descripción debajo de cada imagen (Se guardará al generar):")
+    for idx, file in enumerate(uploaded_files):
+        c_img, c_desc = st.columns([1, 3])
+        with c_img:
+            st.image(file, use_container_width=True)
+        with c_desc:
+            desc = st.text_input(f"Descripción Imagen #{idx+1}", value="Evidencia técnica.", key=f"desc_{idx}")
+            descripciones_capturadas.append(desc)
+
+st.markdown("---")
+
+# --- BOTÓN DE GENERACIÓN ---
+if st.button("💾 GENERAR ARCHIVOS", use_container_width=True):
+    # Procesar imágenes con sus descripciones personalizadas
     lista_imgs_final = []
     if uploaded_files:
-        for file in uploaded_files:
-            p_img = PilImage.open(file)
-            if p_img.mode in ('RGBA', 'P'): p_img = p_img.convert('RGB')
-            img_byte = BytesIO()
-            p_img.save(img_byte, format='JPEG', quality=80)
-            img_byte.seek(0)
-            lista_imgs_final.append({"imagen": img_byte, "descripcion": "Evidencia técnica."})
+        for file, desc_usuario in zip(uploaded_files, descripciones_capturadas):
+            try:
+                p_img = PilImage.open(file)
+                if p_img.mode in ('RGBA', 'P'): p_img = p_img.convert('RGB')
+                img_byte = BytesIO()
+                p_img.save(img_byte, format='JPEG', quality=80)
+                img_byte.seek(0)
+                
+                lista_imgs_final.append({
+                    "imagen": img_byte, 
+                    "descripcion": desc_usuario # Usamos lo que escribió el usuario
+                })
+            except Exception as e:
+                st.error(f"Error procesando imagen: {e}")
 
     datos = {
         "orden": orden_id, "cliente": f_cliente, "factura": f_fac, "fecha_factura": f_fec_fac,
@@ -190,14 +220,16 @@ if submit:
         "rev_electro": f_rev_electro, "observaciones": f_obs, "conclusiones": f_concl, "tipo_reporte": tipo_rep
     }
 
+    # Generamos los documentos
     st.session_state.pdf_data = generar_pdf(datos, lista_imgs_final)
     st.session_state.txt_data = generar_txt_contenido(datos)
+    st.success("✅ Archivos generados correctamente")
 
+# --- DESCARGA ---
 if st.session_state.pdf_data is not None:
-    st.markdown("---")
+    st.markdown("### 📥 Descargas")
     c1, c2 = st.columns(2)
     with c1:
-        st.download_button("📥 DESCARGAR PDF", data=st.session_state.pdf_data, file_name=f"Informe_{orden_id}.pdf", mime="application/pdf", use_container_width=True)
+        st.download_button("Descargar PDF", data=st.session_state.pdf_data, file_name=f"Informe_{orden_id}.pdf", mime="application/pdf", use_container_width=True)
     with c2:
-        st.download_button("📥 DESCARGAR TXT", data=st.session_state.txt_data, file_name=f"Status_{orden_id}.txt", mime="text/plain", use_container_width=True)
-
+        st.download_button("Descargar TXT", data=st.session_state.txt_data, file_name=f"Status_{orden_id}.txt", mime="text/plain", use_container_width=True)
