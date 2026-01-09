@@ -144,7 +144,7 @@ def generar_pdf(datos, lista_imgs):
 
 def generar_txt_contenido(datos):
     fac_txt = "STOCK" if str(datos['factura']).strip() == "0" else datos['factura']
-    return f"""Estimados\n\nMe dirijo a para indicar el status de estado de la garantia del siguiente producto\n\nCLIENTE: {datos['cliente']}\nFACTURA: {fac_txt}\nFECHA: {datos['fecha_factura']}\nORDEN: {datos['orden']}\nCODIGO: {datos['serie']}\nDESCRIPCION: {datos['producto']}\n\nOBSERVACION: {datos['tipo_reporte']}\n\nDETALLES:\n{datos['observaciones']}\n\nAgradecido a la atención de la presente\nAtentamente \nIng. Pablo Lopez\nCoordinador Postventa Hamilton Beach\n0995115782"""
+    return f"""Estimados\n\nMe dirijo a para indicar el status de estado de la garantia del siguiente producto\n\nCLIENTE: {datos['cliente']}\nFACTURA: {fac_txt}\nFECHA: {datos['fecha_factura']}\nORDEN: {datos['orden']}\nCODIGO: {datos['serie']}\nDESCRIPCION: {datos['producto']}\n\nOBSERVACION: {datos['tipo_reporte']}\n\nDETALLES:\n{datos['observaciones']}\n\nAgradecido a la atención de la presente\nAtentamente {datos['LISTA_REALIZADORES']}\nIng. Pablo Lopez\nCoordinador Postventa Hamilton Beach\n0995115782"""
 
 # --- 4. INTERFAZ ---
 st.title("🚀 Gestión de Reportes Técnicos")
@@ -177,7 +177,7 @@ with col2:
 
 f_rev_fisica = st.text_area("1. Revisión Física", value=f"Ingresa a servicio técnico {f_prod}. Se observa el uso continuo del artículo.")
 f_ingreso_tec = st.text_area("2. Ingresa a servicio técnico")
-f_rev_electro = st.text_area("3. Revisión electro-electrónica-mecanica", value="Se procede a revisar el sistema de alimentación de energía y sus líneas de conexión.\nSe procede a revisar el sistema electrónico del equipo.")
+f_rev_electro = st.text_area("3. Revisión electro-electrónica-mecanica", value="Se procede a revisar el sistema de alimentación de energía y sus líneas de conexión.\nSe procede a revisar el sistema electrónico del equipo./nSe procede a revisar el sistema mecanico de equipo")
 f_obs = st.text_area("4. Observaciones", value="Luego de la revisión del artículo se observa lo siguiente: ")
 
 # --- LÓGICA DE TEXTO DE CONCLUSIONES ---
@@ -242,3 +242,4 @@ if st.session_state.pdf_data is not None:
         st.download_button("Descargar PDF", data=st.session_state.pdf_data, file_name=f"Informe_{orden_id}.pdf", mime="application/pdf", use_container_width=True)
     with c2:
         st.download_button("Descargar TXT", data=st.session_state.txt_data, file_name=f"Status_{orden_id}.txt", mime="text/plain", use_container_width=True)
+
