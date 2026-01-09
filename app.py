@@ -36,7 +36,7 @@ def cargar_datos_servicios():
 
 df_db = cargar_datos_servicios()
 
-# Listas de personal (Tal cual tu código original)
+# --- CONSTANTES Y LISTAS ---
 LISTA_TECNICOS = [
     "Tec. Xavier Ramón", "Tec. Juan Diego Quezada", "Tec. Javier Quiguango",
     "Tec. Wilson Quiguango", "Tec. Carlos Jama", "Tec. Manuel Vera",
@@ -44,6 +44,13 @@ LISTA_TECNICOS = [
 ]
 LISTA_REALIZADORES = ["Ing. Henry Beltran", "Ing. Pablo Lopez ", "Ing. Christian Calle", "Ing. Guillermo Ortiz"]
 OPCIONES_REPORTE = ["FUERA DE GARANTIA", "INFORME TECNICO", "RECLAMO AL PROVEEDOR"]
+
+# Diccionario con los textos predefinidos para las conclusiones
+TEXTOS_CONCLUSIONES = {
+    "FUERA DE GARANTIA": "En marco de las políticas de garantía que mantienen un orden en el proceso se concluye:\nCon base en estos hallazgos, lamentamos indicarle que el daño identificado no es atribuible a defectos de fabricación o materiales, sino al uso indebido del equipo, lo cual invalida la cobertura de garantía.",
+    "INFORME TECNICO": "En marco de las políticas de garantía que mantienen un orden en el proceso se concluye:\nCon base en estos hallazgos indicamos que el equipo funciona correctamente en base a lo que indica el fabricante",
+    "RECLAMO AL PROVEEDOR": "En marco de las políticas de garantía que mantienen un orden en el proceso se concluye:\nSe concluye que el daño es de fábrica debido a las características presentadas. Solicitamos su colaboración con el reclamo pertinente al proveedor."
+}
 
 # --- 3. FUNCIONES DE GENERACIÓN ---
 def agregar_marca_agua(canvas, doc):
@@ -119,7 +126,6 @@ def generar_pdf(datos, lista_imgs):
         for idx, i in enumerate(lista_imgs):
             story.append(Spacer(1, 10))
             try:
-                # Intentamos cargar la imagen
                 img_obj = Image(i['imagen'], width=2.4*inch, height=1.7*inch)
                 desc_texto = i['descripcion']
                 t_img = Table([[img_obj, Paragraph(f"<b>Imagen #{idx+1}:</b><br/>{desc_texto}", est_txt)]], colWidths=[2.6*inch, 4.6*inch])
@@ -154,10 +160,11 @@ if orden_id:
         try: ff_v = pd.to_datetime(str(row.get('Fec_Fac_Min',''))).date()
         except: pass
 
-# --- FORMULARIO (Sin st.form para permitir interactividad en imágenes) ---
+# --- FORMULARIO INTERACTIVO ---
 st.markdown("### Datos del Reporte")
 col1, col2 = st.columns(2)
 with col1:
+    # Selector de tipo de reporte
     tipo_rep = st.selectbox("Tipo de Reporte", options=OPCIONES_REPORTE)
     f_realizador = st.selectbox("Realizado por", options=LISTA_REALIZADORES)
     f_cliente = st.text_input("Cliente", value=c_v)
@@ -172,7 +179,11 @@ f_rev_fisica = st.text_area("1. Revisión Física", value=f"Ingresa a servicio t
 f_ingreso_tec = st.text_area("2. Ingresa a servicio técnico")
 f_rev_electro = st.text_area("3. Revisión electro-electrónica-mecanica", value="Se procede a revisar el sistema de alimentación de energía y sus líneas de conexión.\nSe procede a revisar el sistema electrónico del equipo.")
 f_obs = st.text_area("4. Observaciones", value="Luego de la revisión del artículo se observa lo siguiente: ")
-f_concl = st.text_area("5. Conclusiones")
+
+# --- LÓGICA DE TEXTO DE CONCLUSIONES ---
+# Obtenemos el texto basado en la selección del diccionario definido arriba
+texto_conclusiones_default = TEXTOS_CONCLUSIONES.get(tipo_rep, "")
+f_concl = st.text_area("5. Conclusiones", value=texto_conclusiones_default, height=150)
 
 # --- SECCIÓN DE IMÁGENES INTERACTIVA ---
 st.markdown("---")
@@ -195,7 +206,6 @@ st.markdown("---")
 
 # --- BOTÓN DE GENERACIÓN ---
 if st.button("💾 GENERAR ARCHIVOS", use_container_width=True):
-    # Procesar imágenes con sus descripciones personalizadas
     lista_imgs_final = []
     if uploaded_files:
         for file, desc_usuario in zip(uploaded_files, descripciones_capturadas):
@@ -208,7 +218,7 @@ if st.button("💾 GENERAR ARCHIVOS", use_container_width=True):
                 
                 lista_imgs_final.append({
                     "imagen": img_byte, 
-                    "descripcion": desc_usuario # Usamos lo que escribió el usuario
+                    "descripcion": desc_usuario 
                 })
             except Exception as e:
                 st.error(f"Error procesando imagen: {e}")
@@ -220,7 +230,6 @@ if st.button("💾 GENERAR ARCHIVOS", use_container_width=True):
         "rev_electro": f_rev_electro, "observaciones": f_obs, "conclusiones": f_concl, "tipo_reporte": tipo_rep
     }
 
-    # Generamos los documentos
     st.session_state.pdf_data = generar_pdf(datos, lista_imgs_final)
     st.session_state.txt_data = generar_txt_contenido(datos)
     st.success("✅ Archivos generados correctamente")
