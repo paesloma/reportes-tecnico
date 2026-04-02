@@ -5,12 +5,13 @@ from io import BytesIO
 import os
 from groq import Groq
 
-# Importaciones de ReportLab para el Informe
+# Importaciones de ReportLab
 from reportlab.lib.pagesizes import letter
 from reportlab.lib.styles import ParagraphStyle
 from reportlab.platypus import SimpleDocTemplate, Paragraph, Spacer, Image, Table, TableStyle
 from reportlab.lib.units import inch
 from reportlab.lib import colors
+from reportlab.pdfgen import canvas
 
 # --- 0. CONFIGURACIÓN DE IA ---
 GROQ_KEY = "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"
@@ -52,32 +53,22 @@ TEXTOS_CONCLUSIONES = {
     "RECLAMO AL PROVEEDOR": "En marco de las políticas de garantía que mantienen un orden en el proceso se concluye:\nSe concluye que el daño es de fábrica debido a las características presentadas. Solicitamos su colaboración con el reclamo pertinente al proveedor."
 }
 
-# --- 3. GENERACIÓN DE ARCHIVOS ---
+# --- 3. FUNCIONES DE GENERACIÓN ---
+
+def añadir_marca_agua(canvas, doc):
+    """Agrega la marca de agua en el fondo de cada página."""
+    if os.path.exists("marca_agua.png"):
+        canvas.saveState()
+        # Ajusta opacidad si es necesario (ReportLab no tiene opacidad nativa fácil para imágenes, 
+        # se recomienda que el PNG ya sea traslúcido)
+        canvas.drawImage("marca_agua.png", 1.5*inch, 2.5*inch, width=5*inch, height=5*inch, mask='auto')
+        canvas.restoreState()
+
 def generar_txt(datos):
-    contenido = f"""RESUMEN DE REPORTE TÉCNICO
----------------------------------
-Orden: {datos['orden']}
-Factura: {datos['factura']}
-Cliente: {datos['cliente']}
-Producto: {datos['producto']}
-Serie: {datos['serie']}
-Fecha: {datos['fecha_hoy']}
-Técnico: {datos['tecnico']}
-Realizado por: {datos['realizador']}
-
-1. REVISIÓN FÍSICA:
-{datos['rev_fisica']}
-
-2. REVISIÓN TÉCNICA:
-{datos['rev_electro']}
-
-3. OBSERVACIONES:
-{datos['observaciones']}
-
-4. CONCLUSIONES:
-{datos['conclusiones']}
----------------------------------
-Generado automáticamente."""
+    contenido = f"RESUMEN TÉCNICO - ORDEN {datos['orden']}\n" + "-"*30 + "\n"
+    contenido += f"Cliente: {datos['cliente']}\nProducto: {datos['producto']}\nSerie: {datos['serie']}\n"
+    contenido += f"Técnico: {datos['tecnico']}\n\n1. REVISIÓN FÍSICA:\n{datos['rev_fisica']}\n\n"
+    contenido += f"2. ANÁLISIS:\n{datos['rev_electro']}\n\n4. CONCLUSIONES:\n{datos['conclusiones']}"
     return contenido.encode('utf-8')
 
 def generar_pdf(datos, fotos):
@@ -89,7 +80,7 @@ def generar_pdf(datos, fotos):
     est_txt = ParagraphStyle('TXT', fontSize=9, fontName='Helvetica', leading=11)
     
     story = []
-    # Encabezado con logos si existen
+    # Encabezado
     if os.path.exists("logo.png") and os.path.exists("logo_derecho.png"):
         header = Table([[Image("logo.png", width=1.4*inch, height=0.55*inch), Image("logo_derecho.png", width=1.4*inch, height=0.55*inch)]], colWidths=[3.7*inch, 3.7*inch])
         header.setStyle(TableStyle([('ALIGN', (1,0), (1,0), 'RIGHT')]))
@@ -117,7 +108,8 @@ def generar_pdf(datos, fotos):
             img = Image(BytesIO(f['data']), width=2.4*inch, height=1.7*inch)
             story.append(Table([[img, Paragraph(f['desc'], est_txt)]], colWidths=[2.6*inch, 4.4*inch]))
 
-    doc.build(story)
+    # Se construye el PDF llamando a la función de marca de agua en cada página
+    doc.build(story, onLaterPages=añadir_marca_agua, onFirstPage=añadir_marca_agua)
     buffer.seek(0)
     return buffer.read()
 
@@ -145,7 +137,7 @@ with col2:
     f_fec_hoy = st.date_input("Fecha Reporte", value=date.today())
     f_serie = st.text_input("Serie/Artículo", value=s_v)
 
-f_daño = st.text_area("🔧 Daño detectado (Uso interno/IA)", placeholder="Describa el fallo...")
+f_daño = st.text_area("🔧 Daño detectado (IA)", placeholder="Describa el fallo...")
 f_rev_fisica = st.text_area("1. Revisión Física", value=f"Ingresa a servicio técnico {f_prod}. Se observa el uso continuo del artículo.")
 
 if st.button("🤖 Autocompletar con IA"):
@@ -187,9 +179,8 @@ if st.button("💾 GENERAR ARCHIVOS", use_container_width=True):
     datos = {"orden": orden_id, "cliente": f_cliente, "factura": f_fac, "producto": f_prod, "serie": f_serie, "tecnico": f_tecnico, "realizador": f_realizador, "fecha_hoy": f_fec_hoy, "rev_fisica": f_rev_fisica, "rev_electro": f_rev_electro, "observaciones": f_obs, "conclusiones": f_concl}
     st.session_state.pdf_data = generar_pdf(datos, st.session_state.lista_fotos)
     st.session_state.txt_data = generar_txt(datos)
-    st.success("✅ Archivos generados correctamente")
+    st.success("✅ Archivos listos")
 
-# BOTONES DE DESCARGA
 if st.session_state.pdf_data and st.session_state.txt_data:
     col_a, col_b = st.columns(2)
     with col_a:
