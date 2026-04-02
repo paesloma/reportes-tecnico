@@ -40,38 +40,32 @@ def cargar_datos_servicios():
 
 df_db = cargar_datos_servicios()
 
-# CONSTANTES
 LISTA_TECNICOS = ["Tec. Xavier Ramón", "Tec. Juan Diego Quezada", "Tec. Javier Quiguango", "Tec. Wilson Quiguango", "Tec. Carlos Jama", "Tec. Manuel Vera", "Tec. Juan Farez", "Tec. Santiago Farez"]
 LISTA_REALIZADORES = ["Ing. Henry Beltran", "Ing. Pablo Lopez", "Ing. Christian Calle", "Ing. Guillermo Ortiz"]
 OPCIONES_REPORTE = ["FUERA DE GARANTIA", "INFORME TECNICO", "RECLAMO AL PROVEEDOR"]
 
-TEXTOS_CONCLUSIONES = {
-    "FUERA DE GARANTIA": "En marco de las políticas de garantía que mantienen un orden en el proceso se concluye:\nCon base en estos hallazgos, lamentamos indicarle que el daño identificado no es atribuible a defectos de fabricación o materiales, sino al uso indebido del equipo, lo cual invalida la cobertura de garantía.",
-    "INFORME TECNICO": "En marco de las políticas de garantía que mantienen un orden en el proceso se concluye:\nCon base en estos hallazgos indicamos que el equipo funciona correctamente en base a lo que indica el fabricante",
-    "RECLAMO AL PROVEEDOR": "En marco de las políticas de garantía que mantienen un orden en el proceso se concluye:\nSe concluye que el daño es de fábrica debido a las características presentadas. Solicitamos su colaboración con el reclamo pertinente al proveedor."
-}
-
 # --- 3. FUNCIONES DE GENERACIÓN ---
 
 def dibujar_fondo(canvas, doc):
-    """Dibuja la marca de agua antes que el resto del contenido."""
+    """Aplica la marca de agua en el fondo de cada página."""
     if os.path.exists("marca_agua.png"):
         canvas.saveState()
-        # Posición centrada
-        canvas.drawImage("marca_agua.png", 1*inch, 2*inch, width=6.5*inch, height=6.5*inch, mask='auto')
+        canvas.drawImage("marca_agua.png", 1*inch, 2*inch, width=6.5*inch, height=6.5*inch, mask='auto', preserveAspectRatio=True)
         canvas.restoreState()
 
 def generar_pdf(datos, fotos):
     buffer = BytesIO()
+    # Márgenes ajustados para scannability
     doc = SimpleDocTemplate(buffer, pagesize=letter, topMargin=0.5*inch, bottomMargin=0.5*inch, leftMargin=0.6*inch, rightMargin=0.6*inch)
     
     color_azul = colors.HexColor("#0056b3")
     
-    # ESTILOS ACTUALIZADOS
+    # ESTILOS
     est_titulo = ParagraphStyle('T', fontSize=16, alignment=TA_CENTER, fontName='Helvetica-Bold', textColor=color_azul)
     est_sec = ParagraphStyle('S', fontSize=10, fontName='Helvetica-Bold', textColor=colors.white, backColor=color_azul, borderPadding=4, spaceBefore=15, spaceAfter=8)
     est_txt = ParagraphStyle('TXT', fontSize=9, fontName='Helvetica', leading=12, alignment=TA_JUSTIFY)
-    est_firma = ParagraphStyle('F', fontSize=9, alignment=TA_CENTER, fontName='Helvetica-Bold')
+    est_firma_cargo = ParagraphStyle('FC', fontSize=10, alignment=TA_CENTER, fontName='Helvetica-Bold')
+    est_firma_nombre = ParagraphStyle('FN', fontSize=9, alignment=TA_CENTER, fontName='Helvetica')
 
     story = []
     
@@ -85,7 +79,7 @@ def generar_pdf(datos, fotos):
     story.append(Paragraph("INFORME TÉCNICO DE SERVICIO", est_titulo))
     story.append(Spacer(1, 15))
     
-    # Tabla Datos
+    # Tabla de Datos Principales
     info = [[f"Orden: {datos['orden']}", f"Factura: {datos['factura']}"],
             [f"Cliente: {datos['cliente']}", f"Producto: {datos['producto']}"],
             [f"Serie: {datos['serie']}", f"Fecha Reporte: {datos['fecha_hoy']}"]]
@@ -94,13 +88,19 @@ def generar_pdf(datos, fotos):
     story.append(t)
 
     # Secciones Justificadas
-    for tit, cont in [("1. Revisión Física", datos['rev_fisica']), ("2. Revisión Técnica", datos['rev_electro']), 
-                      ("3. Observaciones", datos['observaciones']), ("4. Conclusiones", datos['conclusiones'])]:
+    secciones = [
+        ("1. Revisión Física", datos['rev_fisica']),
+        ("2. Revisión Técnica", datos['rev_electro']), 
+        ("3. Observaciones", datos['observaciones']), 
+        ("4. Conclusiones", datos['conclusiones'])
+    ]
+
+    for tit, cont in secciones:
         story.append(Paragraph(tit, est_sec))
-        story.append(Spacer(1, 4)) # Pequeño espacio extra
+        story.append(Spacer(1, 5))
         story.append(Paragraph(cont.replace('\n', '<br/>'), est_txt))
     
-    # Fotos
+    # Evidencia Fotográfica
     if fotos:
         story.append(Paragraph("EVIDENCIA FOTOGRÁFICA", est_sec))
         for f in fotos:
@@ -109,21 +109,21 @@ def generar_pdf(datos, fotos):
             ft.setStyle(TableStyle([('VALIGN', (0,0), (-1,-1), 'TOP'), ('BOTTOMPADDING', (0,0), (-1,-1), 15)]))
             story.append(ft)
 
-    # Espacio para firmas
-    story.append(Spacer(1, 40))
-    firmas = [[Paragraph("__________________________", est_firma), Paragraph("__________________________", est_firma)],
-              [Paragraph("Realizado por:", est_firma), Paragraph("Revisado por:", est_firma)],
-              [Paragraph(datos['realizador'], est_txt), Paragraph(datos['tecnico'], est_txt)]]
+    # Bloque de Firmas Centrado y Sin Línea
+    story.append(Spacer(1, 60))
+    firmas = [
+        [Paragraph("Realizado por:", est_firma_cargo), Paragraph("Revisado por:", est_firma_cargo)],
+        [Paragraph(datos['realizador'], est_firma_nombre), Paragraph(datos['tecnico'], est_firma_nombre)]
+    ]
     tf = Table(firmas, colWidths=[3.65*inch, 3.65*inch])
-    tf.setStyle(TableStyle([('ALIGN', (0,0), (-1,-1), 'CENTER')]))
+    tf.setStyle(TableStyle([('ALIGN', (0,0), (-1,-1), 'CENTER'), ('VALIGN', (0,0), (-1,-1), 'MIDDLE')]))
     story.append(tf)
 
-    # El secreto es usar onFirstPage y onLaterPages para que el fondo sea la capa 0
     doc.build(story, onFirstPage=dibujar_fondo, onLaterPages=dibujar_fondo)
     buffer.seek(0)
     return buffer.read()
 
-# --- 4. INTERFAZ STREAMLIT ---
+# --- 4. INTERFAZ DE USUARIO ---
 st.title("🚀 Gestión de Reportes Técnicos")
 
 orden_id = st.text_input("Ingrese número de Orden")
@@ -147,12 +147,12 @@ with col2:
     f_fec_hoy = st.date_input("Fecha Reporte", value=date.today())
     f_serie = st.text_input("Serie/Artículo", value=s_v)
 
-f_daño = st.text_area("🔧 Análisis de Fallo (IA)", placeholder="Describa el problema...")
+f_daño = st.text_area("🔧 Análisis de Fallo (IA)")
 f_rev_fisica = st.text_area("1. Revisión Física", value=f"Ingresa a servicio técnico {f_prod}. Se observa el uso continuo del artículo.")
 
-if st.button("🤖 Generar Análisis con IA"):
+if st.button("🤖 Autocompletar con IA"):
     if f_daño:
-        with st.spinner("Analizando..."):
+        with st.spinner("IA trabajando..."):
             prompt = f"Analiza: {f_daño} en {f_prod}. Devuelve REVISION_TEC: [pasos] y OBSERVACIONES: [conclusiones]. Sin asteriscos."
             resp = client.chat.completions.create(messages=[{"role": "user", "content": prompt}], model="llama-3.3-70b-versatile")
             clean = resp.choices[0].message.content.replace("*", "").strip()
@@ -163,8 +163,9 @@ if st.button("🤖 Generar Análisis con IA"):
 
 f_rev_electro = st.text_area("2. Revisión Técnica", value=st.session_state.ai_rev_electro)
 f_obs = st.text_area("3. Observaciones", value=st.session_state.ai_obs)
-f_concl = st.text_area("4. Conclusiones", value=TEXTOS_CONCLUSIONES.get(f_tipo, ""))
+f_concl = st.text_area("4. Conclusiones")
 
+# Subida de fotos
 st.subheader("🖼️ Evidencia Fotográfica")
 up_files = st.file_uploader("Añadir fotos", type=['jpg','png','jpeg'], accept_multiple_files=True, key=f"up_{st.session_state.uploader_key}")
 
@@ -183,12 +184,7 @@ for i, foto in enumerate(st.session_state.lista_fotos):
             st.session_state.uploader_key += 1
             st.rerun()
 
-if st.button("💾 PREPARAR DESCARGAS", use_container_width=True):
+if st.button("💾 GENERAR INFORME PDF", use_container_width=True):
     datos = {"orden": orden_id, "cliente": f_cliente, "factura": f_fac, "producto": f_prod, "serie": f_serie, "tecnico": f_tecnico, "realizador": f_realizador, "fecha_hoy": f_fec_hoy, "rev_fisica": f_rev_fisica, "rev_electro": f_rev_electro, "observaciones": f_obs, "conclusiones": f_concl}
-    
     pdf_bytes = generar_pdf(datos, st.session_state.lista_fotos)
-    txt_bytes = f"REPORTE {orden_id}\n\n1. FISICA:\n{f_rev_fisica}\n\n2. TECNICA:\n{f_rev_electro}\n\n4. CONCLUSIONES:\n{f_concl}".encode('utf-8')
-    
-    col_a, col_b = st.columns(2)
-    col_a.download_button("📥 Descargar Informe PDF", data=pdf_bytes, file_name=f"Reporte_{orden_id}.pdf", mime="application/pdf", use_container_width=True)
-    col_b.download_button("📥 Descargar Resumen TXT", data=txt_bytes, file_name=f"Resumen_{orden_id}.txt", mime="text/plain", use_container_width=True)
+    st.download_button("📥 Descargar PDF", data=pdf_bytes, file_name=f"Reporte_{orden_id}.pdf", mime="application/pdf", use_container_width=True)
