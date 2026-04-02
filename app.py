@@ -4,6 +4,7 @@ from datetime import date
 from io import BytesIO
 from PIL import Image as PilImage
 import os
+import google.generativeai as genai  # <--- Nueva importación
 
 # Importaciones de ReportLab
 from reportlab.lib.pagesizes import letter
@@ -11,6 +12,13 @@ from reportlab.lib.styles import ParagraphStyle
 from reportlab.platypus import SimpleDocTemplate, Paragraph, Spacer, Image, Table, TableStyle
 from reportlab.lib.units import inch
 from reportlab.lib import colors
+
+# --- 0. CONFIGURACIÓN DE GEMINI ---
+try:
+    genai.configure(api_key=st.secrets["GEMINI_API_KEY"])
+    model = genai.GenerativeModel('gemini-1.5-flash')
+except Exception as e:
+    st.error("Error al configurar Gemini. Verifica tu API KEY en los Secrets.")
 
 # --- 1. CONFIGURACIÓN Y PERSISTENCIA ---
 st.set_page_config(page_title="Generador de Reportes", page_icon="🔧", layout="centered")
@@ -45,14 +53,13 @@ LISTA_TECNICOS = [
 LISTA_REALIZADORES = ["Ing. Henry Beltran", "Ing. Pablo Lopez ", "Ing. Christian Calle", "Ing. Guillermo Ortiz"]
 OPCIONES_REPORTE = ["FUERA DE GARANTIA", "INFORME TECNICO", "RECLAMO AL PROVEEDOR"]
 
-# Diccionario con los textos predefinidos para las conclusiones
 TEXTOS_CONCLUSIONES = {
     "FUERA DE GARANTIA": "En marco de las políticas de garantía que mantienen un orden en el proceso se concluye:\nCon base en estos hallazgos, lamentamos indicarle que el daño identificado no es atribuible a defectos de fabricación o materiales, sino al uso indebido del equipo, lo cual invalida la cobertura de garantía.",
     "INFORME TECNICO": "En marco de las políticas de garantía que mantienen un orden en el proceso se concluye:\nCon base en estos hallazgos indicamos que el equipo funciona correctamente en base a lo que indica el fabricante",
     "RECLAMO AL PROVEEDOR": "En marco de las políticas de garantía que mantienen un orden en el proceso se concluye:\nSe concluye que el daño es de fábrica debido a las características presentadas. Solicitamos su colaboración con el reclamo pertinente al proveedor."
 }
 
-# --- 3. FUNCIONES DE GENERACIÓN ---
+# --- 3. FUNCIONES DE GENERACIÓN (Sin cambios) ---
 def agregar_marca_agua(canvas, doc):
     watermark_file = "watermark.png"
     if os.path.exists(watermark_file):
@@ -73,7 +80,6 @@ def generar_pdf(datos, lista_imgs):
     
     story = []
 
-    # --- CABECERA ---
     logo_izq_path = "logo.png"
     logo_der_path = "logo_derecho.png"
     
@@ -120,7 +126,6 @@ def generar_pdf(datos, lista_imgs):
         story.append(Paragraph(cont.replace('\n', '<br/>'), est_txt))
         story.append(Spacer(1, 5))
 
-    # --- LÓGICA DE IMÁGENES ---
     if lista_imgs:
         story.append(Paragraph("EVIDENCIA DE IMÁGENES", est_sec))
         for idx, i in enumerate(lista_imgs):
@@ -143,10 +148,7 @@ def generar_pdf(datos, lista_imgs):
     return buffer.read()
 
 def generar_txt_contenido(datos):
-    # Formateo de la factura si es 0
     fac_txt = "STOCK" if str(datos['factura']).strip() == "0" else datos['factura']
-    
-    # Construcción del mensaje
     return (
         f"Estimados\n\n"
         f"Me dirijo a usted para indicar el status de estado de la garantía del siguiente producto:\n\n"
@@ -156,14 +158,15 @@ def generar_txt_contenido(datos):
         f"ORDEN DE SERVICIO: {datos['orden']}\n"
         f"SERIE/CÓDIGO: {datos['serie']}\n"
         f"PRODUCTO: {datos['producto']}\n"
-        f"TÉCNICO ASIGNADO: {datos['tecnico']}\n\n" # <--- Se agregó el técnico
+        f"TÉCNICO ASIGNADO: {datos['tecnico']}\n\n"
         f"TIPO DE REPORTE: {datos['tipo_reporte']}\n\n"
-        f"CONCLUSIONES:\n{datos['conclusiones']}\n\n" # <--- Usa las conclusiones dinámicas
+        f"CONCLUSIONES:\n{datos['conclusiones']}\n\n"
         f"Agradecido a la atención de la presente.\n\n"
         f"Atentamente,\n"
-        f"{datos['realizador']}\n" # <--- Aquí corregimos el error (usamos la selección, no la lista)
+        f"{datos['realizador']}\n"
         f"Coordinador Postventa"
     )
+
 # --- 4. INTERFAZ ---
 st.title("🚀 Gestión de Reportes Técnicos")
 
@@ -178,11 +181,9 @@ if orden_id:
         try: ff_v = pd.to_datetime(str(row.get('Fec_Fac_Min',''))).date()
         except: pass
 
-# --- FORMULARIO INTERACTIVO ---
 st.markdown("### Datos del Reporte")
 col1, col2 = st.columns(2)
 with col1:
-    # Selector de tipo de reporte
     tipo_rep = st.selectbox("Tipo de Reporte", options=OPCIONES_REPORTE)
     f_realizador = st.selectbox("Realizado por", options=LISTA_REALIZADORES)
     f_cliente = st.text_input("Cliente", value=c_v)
@@ -194,16 +195,48 @@ with col2:
     f_serie = st.text_input("Serie/Artículo", value=s_v)
 
 f_rev_fisica = st.text_area("1. Revisión Física", value=f"Ingresa a servicio técnico {f_prod}. Se observa el uso continuo del artículo.")
-f_ingreso_tec = st.text_area("2. Ingresa a servicio técnico")
-f_rev_electro = st.text_area("3. Revisión electro-electrónica-mecanica", value="Se procede a revisar el sistema de alimentación de energía y sus líneas de conexión.\nSe procede a revisar el sistema electrónico del equipo./nSe procede a revisar el sistema mecanico de equipo")
-f_obs = st.text_area("4. Observaciones", value="Luego de la revisión del artículo se observa lo siguiente: ")
 
-# --- LÓGICA DE TEXTO DE CONCLUSIONES ---
-# Obtenemos el texto basado en la selección del diccionario definido arriba
+# --- SECCIÓN IA ---
+st.markdown("### ✨ Asistente de IA (Gemini)")
+if st.button("🤖 Autocompletar con IA"):
+    if f_rev_fisica:
+        with st.spinner("Analizando revisión técnica..."):
+            prompt = f"""
+            Eres un experto en soporte técnico de línea blanca y tecnología. 
+            Basado en esta revisión física: '{f_rev_fisica}' para el producto '{f_prod}', genera:
+            1. Una revisión electro-electrónica-mecánica formal (pasos realizados).
+            2. Observaciones técnicas detalladas.
+            Usa un tono profesional. Responde en este formato:
+            ELECTRO: [Tu texto aquí]
+            OBS: [Tu texto aquí]
+            """
+            response = model.generate_content(prompt)
+            texto_ia = response.text
+            
+            # Intentar separar la respuesta
+            if "ELECTRO:" in texto_ia and "OBS:" in texto_ia:
+                st.session_state.ai_electro = texto_ia.split("ELECTRO:")[1].split("OBS:")[0].strip()
+                st.session_state.ai_obs = texto_ia.split("OBS:")[1].strip()
+                st.success("Sugerencias generadas. Revisa los campos abajo.")
+            else:
+                st.session_state.ai_electro = texto_ia
+                st.session_state.ai_obs = "Revisar según diagnóstico anterior."
+    else:
+        st.warning("Escribe algo en la Revisión Física para que la IA pueda ayudarte.")
+
+# --- CAMPOS RESTANTES ---
+f_ingreso_tec = st.text_area("2. Ingresa a servicio técnico")
+
+# Valores por defecto o de la IA
+default_electro = st.session_state.get('ai_electro', "Se procede a revisar el sistema de alimentación de energía y sus líneas de conexión.\nSe procede a revisar el sistema electrónico del equipo.\nSe procede a revisar el sistema mecanico de equipo")
+default_obs = st.session_state.get('ai_obs', "Luego de la revisión del artículo se observa lo siguiente: ")
+
+f_rev_electro = st.text_area("3. Revisión electro-electrónica-mecanica", value=default_electro)
+f_obs = st.text_area("4. Observaciones", value=default_obs)
+
 texto_conclusiones_default = TEXTOS_CONCLUSIONES.get(tipo_rep, "")
 f_concl = st.text_area("5. Conclusiones", value=texto_conclusiones_default, height=150)
 
-# --- SECCIÓN DE IMÁGENES INTERACTIVA ---
 st.markdown("---")
 st.markdown("### 📸 Evidencia Fotográfica")
 uploaded_files = st.file_uploader("Subir imágenes", type=['jpg','png','jpeg'], accept_multiple_files=True)
@@ -211,7 +244,6 @@ uploaded_files = st.file_uploader("Subir imágenes", type=['jpg','png','jpeg'], 
 descripciones_capturadas = [] 
 
 if uploaded_files:
-    st.info("📝 Edita la descripción debajo de cada imagen (Se guardará al generar):")
     for idx, file in enumerate(uploaded_files):
         c_img, c_desc = st.columns([1, 3])
         with c_img:
@@ -222,7 +254,6 @@ if uploaded_files:
 
 st.markdown("---")
 
-# --- BOTÓN DE GENERACIÓN ---
 if st.button("💾 GENERAR ARCHIVOS", use_container_width=True):
     lista_imgs_final = []
     if uploaded_files:
@@ -252,7 +283,6 @@ if st.button("💾 GENERAR ARCHIVOS", use_container_width=True):
     st.session_state.txt_data = generar_txt_contenido(datos)
     st.success("✅ Archivos generados correctamente")
 
-# --- DESCARGA ---
 if st.session_state.pdf_data is not None:
     st.markdown("### 📥 Descargas")
     c1, c2 = st.columns(2)
@@ -260,5 +290,3 @@ if st.session_state.pdf_data is not None:
         st.download_button("Descargar PDF", data=st.session_state.pdf_data, file_name=f"Informe_{orden_id}.pdf", mime="application/pdf", use_container_width=True)
     with c2:
         st.download_button("Descargar TXT", data=st.session_state.txt_data, file_name=f"Status_{orden_id}.txt", mime="text/plain", use_container_width=True)
-
-
