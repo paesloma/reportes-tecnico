@@ -4,21 +4,22 @@ from datetime import date
 from io import BytesIO
 from PIL import Image as PilImage
 import os
-import google.generativeai as genai  # <--- Nueva importación
-
-# Importaciones de ReportLab
-from reportlab.lib.pagesizes import letter
-from reportlab.lib.styles import ParagraphStyle
-from reportlab.platypus import SimpleDocTemplate, Paragraph, Spacer, Image, Table, TableStyle
-from reportlab.lib.units import inch
-from reportlab.lib import colors
+import google.generativeai as genai
 
 # --- 0. CONFIGURACIÓN DE GEMINI ---
+# Intentamos configurar la IA. Si falla, la app seguirá funcionando pero sin el asistente.
 try:
-    genai.configure(api_key=st.secrets["GEMINI_API_KEY"])
-    model = genai.GenerativeModel('gemini-1.5-flash')
+    if "GEMINI_API_KEY" in st.secrets:
+        genai.configure(api_key=st.secrets["GEMINI_API_KEY"])
+        # Usamos la ruta completa del modelo para evitar errores de 'NotFound'
+        model = genai.GenerativeModel('models/gemini-1.5-flash')
+        ia_disponible = True
+    else:
+        st.error("Falta la GEMINI_API_KEY en los Secrets de Streamlit.")
+        ia_disponible = False
 except Exception as e:
-    st.error("Error al configurar Gemini. Verifica tu API KEY en los Secrets.")
+    st.error(f"Error al configurar Gemini: {e}")
+    ia_disponible = False
 
 # --- 1. CONFIGURACIÓN Y PERSISTENCIA ---
 st.set_page_config(page_title="Generador de Reportes", page_icon="🔧", layout="centered")
@@ -27,6 +28,10 @@ if 'pdf_data' not in st.session_state:
     st.session_state.pdf_data = None
 if 'txt_data' not in st.session_state:
     st.session_state.txt_data = None
+if 'ai_electro' not in st.session_state:
+    st.session_state.ai_electro = ""
+if 'ai_obs' not in st.session_state:
+    st.session_state.ai_obs = ""
 
 # --- 2. CARGA DE DATOS ---
 @st.cache_data
@@ -44,12 +49,8 @@ def cargar_datos_servicios():
 
 df_db = cargar_datos_servicios()
 
-# --- CONSTANTES Y LISTAS ---
-LISTA_TECNICOS = [
-    "Tec. Xavier Ramón", "Tec. Juan Diego Quezada", "Tec. Javier Quiguango",
-    "Tec. Wilson Quiguango", "Tec. Carlos Jama", "Tec. Manuel Vera",
-    "Tec. Juan Farez", "Tec. Santiago Farez"
-]
+# --- CONSTANTES ---
+LISTA_TECNICOS = ["Tec. Xavier Ramón", "Tec. Juan Diego Quezada", "Tec. Javier Quiguango", "Tec. Wilson Quiguango", "Tec. Carlos Jama", "Tec. Manuel Vera", "Tec. Juan Farez", "Tec. Santiago Farez"]
 LISTA_REALIZADORES = ["Ing. Henry Beltran", "Ing. Pablo Lopez ", "Ing. Christian Calle", "Ing. Guillermo Ortiz"]
 OPCIONES_REPORTE = ["FUERA DE GARANTIA", "INFORME TECNICO", "RECLAMO AL PROVEEDOR"]
 
@@ -59,7 +60,7 @@ TEXTOS_CONCLUSIONES = {
     "RECLAMO AL PROVEEDOR": "En marco de las políticas de garantía que mantienen un orden en el proceso se concluye:\nSe concluye que el daño es de fábrica debido a las características presentadas. Solicitamos su colaboración con el reclamo pertinente al proveedor."
 }
 
-# --- 3. FUNCIONES DE GENERACIÓN (Sin cambios) ---
+# --- 3. FUNCIONES DE GENERACIÓN PDF (ReportLab) ---
 def agregar_marca_agua(canvas, doc):
     watermark_file = "watermark.png"
     if os.path.exists(watermark_file):
@@ -79,30 +80,24 @@ def generar_pdf(datos, lista_imgs):
     est_firma = ParagraphStyle('F', fontSize=10, fontName='Helvetica-Bold', alignment=1)
     
     story = []
-
-    logo_izq_path = "logo.png"
-    logo_der_path = "logo_derecho.png"
     
-    col_izq = []
-    if os.path.exists(logo_izq_path):
-        col_izq.append(Image(logo_izq_path, width=1.4*inch, height=0.55*inch))
-    
-    col_der = []
-    if os.path.exists(logo_der_path):
-        img_der = Image(logo_der_path, width=1.4*inch, height=0.55*inch)
-        img_der.hAlign = 'RIGHT'
-        col_der.append(img_der)
+    # Cabecera con logos
+    logo_izq, logo_der = "logo.png", "logo_derecho.png"
+    c_izq, c_der = [], []
+    if os.path.exists(logo_izq): c_izq.append(Image(logo_izq, width=1.4*inch, height=0.55*inch))
+    if os.path.exists(logo_der): 
+        img_d = Image(logo_der, width=1.4*inch, height=0.55*inch)
+        img_d.hAlign = 'RIGHT'
+        c_der.append(img_d)
 
-    header_table = Table([[col_izq, col_der]], colWidths=[3.7*inch, 3.7*inch])
+    header_table = Table([[c_izq, c_der]], colWidths=[3.7*inch, 3.7*inch])
     header_table.setStyle(TableStyle([('VALIGN', (0,0), (-1,-1), 'TOP'), ('ALIGN', (1,0), (1,0), 'RIGHT')]))
     story.append(header_table)
-    
     story.append(Spacer(1, 10))
     story.append(Paragraph("INFORME TÉCNICO DE SERVICIO", est_titulo))
     story.append(Spacer(1, 15))
     
     fac_txt = "STOCK" if str(datos['factura']).strip() == "0" else datos['factura']
-    
     info = [
         [Paragraph(f"<b>Orden:</b> {datos['orden']}", est_txt), Paragraph(f"<b>Factura:</b> {fac_txt}", est_txt)],
         [Paragraph(f"<b>Cliente:</b> {datos['cliente']}", est_txt), Paragraph(f"<b>Fec. Factura:</b> {datos['fecha_factura']}", est_txt)],
@@ -110,7 +105,7 @@ def generar_pdf(datos, lista_imgs):
         [Paragraph(f"<b>Realizado por:</b> {datos['realizador']}", est_txt), Paragraph(f"<b>Fecha Reporte:</b> {datos['fecha_hoy']}", est_txt)]
     ]
     t = Table(info, colWidths=[3.7*inch, 3.7*inch])
-    t.setStyle(TableStyle([('GRID', (0,0), (-1,-1), 0.5, colors.lightgrey), ('VALIGN', (0,0), (-1,-1), 'MIDDLE')]))
+    t.setStyle(TableStyle([('GRID', (0,0), (-1,-1), 0.5, colors.lightgrey)]))
     story.append(t)
 
     secciones = [
@@ -130,13 +125,9 @@ def generar_pdf(datos, lista_imgs):
         story.append(Paragraph("EVIDENCIA DE IMÁGENES", est_sec))
         for idx, i in enumerate(lista_imgs):
             story.append(Spacer(1, 10))
-            try:
-                img_obj = Image(i['imagen'], width=2.4*inch, height=1.7*inch)
-                desc_texto = i['descripcion']
-                t_img = Table([[img_obj, Paragraph(f"<b>Imagen #{idx+1}:</b><br/>{desc_texto}", est_txt)]], colWidths=[2.6*inch, 4.6*inch])
-                story.append(t_img)
-            except Exception as e:
-                story.append(Paragraph(f"Error cargando imagen {idx+1}", est_txt))
+            img_obj = Image(i['imagen'], width=2.4*inch, height=1.7*inch)
+            t_img = Table([[img_obj, Paragraph(f"<b>Imagen #{idx+1}:</b><br/>{i['descripcion']}", est_txt)]], colWidths=[2.6*inch, 4.6*inch])
+            story.append(t_img)
 
     story.append(Spacer(1, 60))
     t_firmas = Table([[Paragraph("Realizado por:", est_firma), Paragraph("Revisado por:", est_firma)], 
@@ -149,23 +140,7 @@ def generar_pdf(datos, lista_imgs):
 
 def generar_txt_contenido(datos):
     fac_txt = "STOCK" if str(datos['factura']).strip() == "0" else datos['factura']
-    return (
-        f"Estimados\n\n"
-        f"Me dirijo a usted para indicar el status de estado de la garantía del siguiente producto:\n\n"
-        f"CLIENTE: {datos['cliente']}\n"
-        f"FACTURA: {fac_txt}\n"
-        f"FECHA DE FACTURA: {datos['fecha_factura']}\n"
-        f"ORDEN DE SERVICIO: {datos['orden']}\n"
-        f"SERIE/CÓDIGO: {datos['serie']}\n"
-        f"PRODUCTO: {datos['producto']}\n"
-        f"TÉCNICO ASIGNADO: {datos['tecnico']}\n\n"
-        f"TIPO DE REPORTE: {datos['tipo_reporte']}\n\n"
-        f"CONCLUSIONES:\n{datos['conclusiones']}\n\n"
-        f"Agradecido a la atención de la presente.\n\n"
-        f"Atentamente,\n"
-        f"{datos['realizador']}\n"
-        f"Coordinador Postventa"
-    )
+    return f"Estimados\n\nStatus de garantía:\nCLIENTE: {datos['cliente']}\nFACTURA: {fac_txt}\nORDEN: {datos['orden']}\nPRODUCTO: {datos['producto']}\n\nCONCLUSIONES:\n{datos['conclusiones']}\n\nAtentamente,\n{datos['realizador']}"
 
 # --- 4. INTERFAZ ---
 st.title("🚀 Gestión de Reportes Técnicos")
@@ -196,97 +171,56 @@ with col2:
 
 f_rev_fisica = st.text_area("1. Revisión Física", value=f"Ingresa a servicio técnico {f_prod}. Se observa el uso continuo del artículo.")
 
-# --- SECCIÓN IA ---
-st.markdown("### ✨ Asistente de IA (Gemini)")
+# --- LÓGICA DE IA ---
+st.markdown("### ✨ Asistente de IA")
 if st.button("🤖 Autocompletar con IA"):
-    if f_rev_fisica:
-        with st.spinner("Analizando revisión técnica..."):
-            prompt = f"""
-            Eres un experto en soporte técnico de línea blanca y tecnología. 
-            Basado en esta revisión física: '{f_rev_fisica}' para el producto '{f_prod}', genera:
-            1. Una revisión electro-electrónica-mecánica formal (pasos realizados).
-            2. Observaciones técnicas detalladas.
-            Usa un tono profesional. Responde en este formato:
-            ELECTRO: [Tu texto aquí]
-            OBS: [Tu texto aquí]
-            """
-            response = model.generate_content(prompt)
-            texto_ia = response.text
-            
-            # Intentar separar la respuesta
-            if "ELECTRO:" in texto_ia and "OBS:" in texto_ia:
-                st.session_state.ai_electro = texto_ia.split("ELECTRO:")[1].split("OBS:")[0].strip()
-                st.session_state.ai_obs = texto_ia.split("OBS:")[1].strip()
-                st.success("Sugerencias generadas. Revisa los campos abajo.")
-            else:
-                st.session_state.ai_electro = texto_ia
-                st.session_state.ai_obs = "Revisar según diagnóstico anterior."
+    if ia_disponible and f_rev_fisica:
+        with st.spinner("Gemini está analizando..."):
+            try:
+                prompt = f"Como técnico experto, analiza esta revisión física: '{f_rev_fisica}' del producto '{f_prod}'. Genera: 1- Pasos técnicos de revisión electro-mecánica. 2- Observaciones. Formato: ELECTRO: [texto] OBS: [texto]"
+                response = model.generate_content(prompt)
+                res_text = response.text
+                if "ELECTRO:" in res_text and "OBS:" in res_text:
+                    st.session_state.ai_electro = res_text.split("ELECTRO:")[1].split("OBS:")[0].strip()
+                    st.session_state.ai_obs = res_text.split("OBS:")[1].strip()
+                else:
+                    st.session_state.ai_electro = res_text
+            except Exception as e:
+                st.error(f"Error al generar con IA: {e}")
     else:
-        st.warning("Escribe algo en la Revisión Física para que la IA pueda ayudarte.")
+        st.warning("IA no configurada o campo de revisión vacío.")
 
-# --- CAMPOS RESTANTES ---
 f_ingreso_tec = st.text_area("2. Ingresa a servicio técnico")
+f_rev_electro = st.text_area("3. Revisión electro-electrónica-mecanica", value=st.session_state.ai_electro if st.session_state.ai_electro else "Revisión estándar de líneas de energía y componentes.")
+f_obs = st.text_area("4. Observaciones", value=st.session_state.ai_obs if st.session_state.ai_obs else "Se procede con el diagnóstico preventivo.")
+f_concl = st.text_area("5. Conclusiones", value=TEXTOS_CONCLUSIONES.get(tipo_rep, ""), height=150)
 
-# Valores por defecto o de la IA
-default_electro = st.session_state.get('ai_electro', "Se procede a revisar el sistema de alimentación de energía y sus líneas de conexión.\nSe procede a revisar el sistema electrónico del equipo.\nSe procede a revisar el sistema mecanico de equipo")
-default_obs = st.session_state.get('ai_obs', "Luego de la revisión del artículo se observa lo siguiente: ")
-
-f_rev_electro = st.text_area("3. Revisión electro-electrónica-mecanica", value=default_electro)
-f_obs = st.text_area("4. Observaciones", value=default_obs)
-
-texto_conclusiones_default = TEXTOS_CONCLUSIONES.get(tipo_rep, "")
-f_concl = st.text_area("5. Conclusiones", value=texto_conclusiones_default, height=150)
-
-st.markdown("---")
-st.markdown("### 📸 Evidencia Fotográfica")
+# --- IMÁGENES ---
+st.markdown("### 📸 Evidencia")
 uploaded_files = st.file_uploader("Subir imágenes", type=['jpg','png','jpeg'], accept_multiple_files=True)
-
-descripciones_capturadas = [] 
-
+desc_list = []
 if uploaded_files:
     for idx, file in enumerate(uploaded_files):
-        c_img, c_desc = st.columns([1, 3])
-        with c_img:
-            st.image(file, use_container_width=True)
-        with c_desc:
-            desc = st.text_input(f"Descripción Imagen #{idx+1}", value="Evidencia técnica.", key=f"desc_{idx}")
-            descripciones_capturadas.append(desc)
-
-st.markdown("---")
+        desc = st.text_input(f"Descripción Imagen #{idx+1}", value="Evidencia técnica.", key=f"d_{idx}")
+        desc_list.append(desc)
 
 if st.button("💾 GENERAR ARCHIVOS", use_container_width=True):
-    lista_imgs_final = []
-    if uploaded_files:
-        for file, desc_usuario in zip(uploaded_files, descripciones_capturadas):
-            try:
-                p_img = PilImage.open(file)
-                if p_img.mode in ('RGBA', 'P'): p_img = p_img.convert('RGB')
-                img_byte = BytesIO()
-                p_img.save(img_byte, format='JPEG', quality=80)
-                img_byte.seek(0)
-                
-                lista_imgs_final.append({
-                    "imagen": img_byte, 
-                    "descripcion": desc_usuario 
-                })
-            except Exception as e:
-                st.error(f"Error procesando imagen: {e}")
+    imgs_final = []
+    for file, d in zip(uploaded_files, desc_list):
+        p_img = PilImage.open(file)
+        if p_img.mode != 'RGB': p_img = p_img.convert('RGB')
+        b = BytesIO()
+        p_img.save(b, format='JPEG', quality=80)
+        b.seek(0)
+        imgs_final.append({"imagen": b, "descripcion": d})
 
-    datos = {
-        "orden": orden_id, "cliente": f_cliente, "factura": f_fac, "fecha_factura": f_fec_fac,
-        "producto": f_prod, "serie": f_serie, "tecnico": f_tecnico, "realizador": f_realizador,
-        "fecha_hoy": date.today(), "rev_fisica": f_rev_fisica, "ingreso_tec": f_ingreso_tec,
-        "rev_electro": f_rev_electro, "observaciones": f_obs, "conclusiones": f_concl, "tipo_reporte": tipo_rep
-    }
-
-    st.session_state.pdf_data = generar_pdf(datos, lista_imgs_final)
+    datos = {"orden": orden_id, "cliente": f_cliente, "factura": f_fac, "fecha_factura": f_fec_fac, "producto": f_prod, "serie": f_serie, "tecnico": f_tecnico, "realizador": f_realizador, "fecha_hoy": date.today(), "rev_fisica": f_rev_fisica, "ingreso_tec": f_ingreso_tec, "rev_electro": f_rev_electro, "observaciones": f_obs, "conclusiones": f_concl, "tipo_reporte": tipo_rep}
+    
+    st.session_state.pdf_data = generar_pdf(datos, imgs_final)
     st.session_state.txt_data = generar_txt_contenido(datos)
-    st.success("✅ Archivos generados correctamente")
+    st.success("✅ Generado")
 
-if st.session_state.pdf_data is not None:
-    st.markdown("### 📥 Descargas")
+if st.session_state.pdf_data:
     c1, c2 = st.columns(2)
-    with c1:
-        st.download_button("Descargar PDF", data=st.session_state.pdf_data, file_name=f"Informe_{orden_id}.pdf", mime="application/pdf", use_container_width=True)
-    with c2:
-        st.download_button("Descargar TXT", data=st.session_state.txt_data, file_name=f"Status_{orden_id}.txt", mime="text/plain", use_container_width=True)
+    st.download_button("Descargar PDF", st.session_state.pdf_data, f"Informe_{orden_id}.pdf", "application/pdf")
+    st.download_button("Descargar TXT", st.session_state.txt_data, f"Status_{orden_id}.txt", "text/plain")
