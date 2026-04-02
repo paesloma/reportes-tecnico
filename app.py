@@ -28,15 +28,14 @@ if 'txt_data' not in st.session_state: st.session_state.txt_data = None
 @st.cache_data
 def cargar_datos_servicios():
     if os.path.exists("servicios.csv"):
-        for encoding in ['utf-8', 'latin-1', 'iso-8859-1', 'cp1252']:
+        for encoding in ['utf-8', 'latin-1']:
             try:
                 df = pd.read_csv("servicios.csv", dtype=str, encoding=encoding, sep=None, engine='python')
                 df.columns = df.columns.str.strip()
-                nombres_clave = {'Serie/Artículo': 'Serie', 'Fec. Fac. Min': 'Fec_Fac_Min', 'Fac. Min': 'Fac_Min'}
-                df = df.rename(columns=nombres_clave)
+                df = df.rename(columns={'Serie/Artículo': 'Serie', 'Fec. Fac. Min': 'Fec_Fac_Min', 'Fac. Min': 'Fac_Min'})
                 return df
             except: continue
-    return pd.DataFrame(columns=['Orden', 'Cliente', 'Serie', 'Producto', 'Fec_Fac_Min', 'Fac_Min'])
+    return pd.DataFrame()
 
 df_db = cargar_datos_servicios()
 
@@ -53,16 +52,15 @@ TEXTOS_CONCLUSIONES = {
 
 # --- 3. FUNCIONES DE GENERACIÓN ---
 def agregar_marca_agua(canvas, doc):
-    watermark_file = "watermark.png"
-    if os.path.exists(watermark_file):
+    if os.path.exists("watermark.png"):
         canvas.saveState()
         canvas.setFillAlpha(0.12)
-        canvas.drawImage(watermark_file, 0, 0, width=canvas._pagesize[0], height=canvas._pagesize[1], mask='auto', preserveAspectRatio=True, anchor='c')
+        canvas.drawImage("watermark.png", 0, 0, width=canvas._pagesize[0], height=canvas._pagesize[1], mask='auto')
         canvas.restoreState()
 
 def generar_pdf(datos, lista_imgs):
     buffer = BytesIO()
-    doc = SimpleDocTemplate(buffer, pagesize=letter, topMargin=0.4*inch, bottomMargin=0.4*inch, leftMargin=0.5*inch, rightMargin=0.5*inch)
+    doc = SimpleDocTemplate(buffer, pagesize=letter, topMargin=0.4*inch, bottomMargin=0.4*inch)
     color_azul = colors.HexColor("#0056b3")
     
     est_titulo = ParagraphStyle('T', fontSize=16, alignment=1, fontName='Helvetica-Bold', textColor=color_azul)
@@ -77,26 +75,28 @@ def generar_pdf(datos, lista_imgs):
     col_der = [Image(logo_der, width=1.4*inch, height=0.55*inch)] if os.path.exists(logo_der) else []
     
     header_table = Table([[col_izq, col_der]], colWidths=[3.7*inch, 3.7*inch])
-    header_table.setStyle(TableStyle([('VALIGN', (0,0), (-1,-1), 'TOP'), ('ALIGN', (1,0), (1,0), 'RIGHT')]))
+    header_table.setStyle(TableStyle([('ALIGN', (1,0), (1,0), 'RIGHT')]))
     story.append(header_table)
     story.append(Spacer(1, 10))
     story.append(Paragraph("INFORME TÉCNICO DE SERVICIO", est_titulo))
     story.append(Spacer(1, 15))
     
+    # Datos generales
     fac_txt = "STOCK" if str(datos['factura']).strip() == "0" else datos['factura']
-    info = [
-        [Paragraph(f"<b>Orden:</b> {datos['orden']}", est_txt), Paragraph(f"<b>Factura:</b> {fac_txt}", est_txt)],
-        [Paragraph(f"<b>Cliente:</b> {datos['cliente']}", est_txt), Paragraph(f"<b>Fec. Factura:</b> {datos['fecha_factura']}", est_txt)],
-        [Paragraph(f"<b>Producto:</b> {datos['producto']}", est_txt), Paragraph(f"<b>Serie:</b> {datos['serie']}", est_txt)],
-        [Paragraph(f"<b>Realizado por:</b> {datos['realizador']}", est_txt), Paragraph(f"<b>Fecha Reporte:</b> {datos['fecha_hoy']}", est_txt)]
-    ]
+    info = [[Paragraph(f"<b>Orden:</b> {datos['orden']}", est_txt), Paragraph(f"<b>Factura:</b> {fac_txt}", est_txt)],
+            [Paragraph(f"<b>Cliente:</b> {datos['cliente']}", est_txt), Paragraph(f"<b>Fec. Factura:</b> {datos['fecha_factura']}", est_txt)],
+            [Paragraph(f"<b>Producto:</b> {datos['producto']}", est_txt), Paragraph(f"<b>Serie:</b> {datos['serie']}", est_txt)],
+            [Paragraph(f"<b>Realizado por:</b> {datos['realizador']}", est_txt), Paragraph(f"<b>Fecha Reporte:</b> {datos['fecha_hoy']}", est_txt)]]
     t = Table(info, colWidths=[3.7*inch, 3.7*inch])
     t.setStyle(TableStyle([('GRID', (0,0), (-1,-1), 0.5, colors.lightgrey)]))
     story.append(t)
 
-    # SECCIONES DEL PDF (Se eliminó el punto 2 "Ingresa a servicio")
+    # --- LÓGICA DE FILTRADO (SOLO LO NO SUBRAYADO) ---
+    # Tomamos solo la primera frase de la revisión física para el PDF
+    revision_limpia = datos['rev_fisica'].split('.')[0] + '.'
+
     secciones = [
-        ("1. Revisión Física", datos['rev_fisica']),
+        ("1. Revisión Física", revision_limpia),
         ("2. Revisión electro-electrónica-mecanica", datos['rev_electro']),
         ("3. Observaciones", datos['observaciones']),
         ("4. Conclusiones", datos['conclusiones'])
@@ -113,7 +113,8 @@ def generar_pdf(datos, lista_imgs):
             story.append(t_img)
 
     story.append(Spacer(1, 60))
-    t_firmas = Table([[Paragraph("Realizado por:", est_firma), Paragraph("Revisado por:", est_firma)], [Paragraph(datos['realizador'], est_firma), Paragraph(datos['tecnico'], est_firma)]], colWidths=[3.7*inch, 3.7*inch])
+    t_firmas = Table([[Paragraph("Realizado por:", est_firma), Paragraph("Revisado por:", est_firma)], 
+                      [Paragraph(datos['realizador'], est_firma), Paragraph(datos['tecnico'], est_firma)]], colWidths=[3.7*inch, 3.7*inch])
     story.append(t_firmas)
     
     doc.build(story, onFirstPage=agregar_marca_agua, onLaterPages=agregar_marca_agua)
@@ -122,23 +123,8 @@ def generar_pdf(datos, lista_imgs):
 
 def generar_txt_contenido(datos):
     fac_txt = "STOCK" if str(datos['factura']).strip() == "0" else datos['factura']
-    return (
-        f"Estimados\n\n"
-        f"Me dirijo a usted para indicar el status de estado de la garantía del siguiente producto:\n\n"
-        f"CLIENTE: {datos['cliente']}\n"
-        f"FACTURA: {fac_txt}\n"
-        f"FECHA DE FACTURA: {datos['fecha_factura']}\n"
-        f"ORDEN DE SERVICIO: {datos['orden']}\n"
-        f"SERIE/CÓDIGO: {datos['serie']}\n"
-        f"PRODUCTO: {datos['producto']}\n"
-        f"TÉCNICO ASIGNADO: {datos['tecnico']}\n\n"
-        f"TIPO DE REPORTE: {datos['tipo_reporte']}\n\n"
-        f"CONCLUSIONES:\n{datos['conclusiones']}\n\n"
-        f"Agradecido a la atención de la presente.\n\n"
-        f"Atentamente,\n"
-        f"{datos['realizador']}\n"
-        f"Coordinador Postventa"
-    )
+    return (f"Estimados\n\nStatus de garantía:\nCLIENTE: {datos['cliente']}\nFACTURA: {fac_txt}\nORDEN: {datos['orden']}\n"
+            f"PRODUCTO: {datos['producto']}\nTÉCNICO: {datos['tecnico']}\n\nCONCLUSIONES:\n{datos['conclusiones']}\n\nAtentamente,\n{datos['realizador']}")
 
 # --- 4. INTERFAZ ---
 st.title("🚀 Gestión de Reportes Técnicos")
@@ -146,7 +132,7 @@ st.title("🚀 Gestión de Reportes Técnicos")
 orden_id = st.text_input("Ingrese número de Orden")
 c_v, s_v, p_v, f_v, ff_v = "", "", "", "", date.today()
 
-if orden_id:
+if orden_id and not df_db.empty:
     res = df_db[df_db['Orden'] == orden_id]
     if not res.empty:
         row = res.iloc[0]
@@ -166,9 +152,9 @@ with col2:
     f_fec_fac = st.date_input("Fecha Factura", value=ff_v)
     f_serie = st.text_input("Serie/Artículo", value=s_v)
 
+# En el área de texto puedes escribir todo (incluyendo lo subrayado para la IA)
 f_rev_fisica = st.text_area("1. Revisión Física", value=f"Ingresa a servicio técnico {f_prod}. Se observa el uso continuo del artículo.")
 
-# ASISTENTE IA
 if st.button("🤖 Autocompletar con IA"):
     if f_rev_fisica:
         with st.spinner("Analizando..."):
@@ -188,32 +174,23 @@ f_rev_electro = st.text_area("2. Revisión Técnica", value=st.session_state.ai_
 f_obs = st.text_area("3. Observaciones", value=st.session_state.ai_obs if st.session_state.ai_obs else "Hallazgos detectados...")
 f_concl = st.text_area("4. Conclusiones", value=TEXTOS_CONCLUSIONES.get(tipo_rep, ""), height=150)
 
-# FOTOS
 uploaded_files = st.file_uploader("Subir imágenes", type=['jpg','png','jpeg'], accept_multiple_files=True)
-descripciones_capturadas = []
-if uploaded_files:
-    for idx, file in enumerate(uploaded_files):
-        desc = st.text_input(f"Descripción Foto #{idx+1}", value="Evidencia técnica.", key=f"desc_{idx}")
-        descripciones_capturadas.append(desc)
+descripciones_capturadas = [st.text_input(f"Descripción Foto #{i+1}", value="Evidencia técnica.", key=f"d_{i}") for i, _ in enumerate(uploaded_files)]
 
 if st.button("💾 GENERAR ARCHIVOS", use_container_width=True):
     lista_imgs_final = []
-    if uploaded_files:
-        for file, d_u in zip(uploaded_files, descripciones_capturadas):
-            p_img = PilImage.open(file).convert('RGB')
-            img_byte = BytesIO(); p_img.save(img_byte, format='JPEG', quality=80); img_byte.seek(0)
-            lista_imgs_final.append({"imagen": img_byte, "descripcion": d_u})
+    for file, d_u in zip(uploaded_files, descripciones_capturadas):
+        p_img = PilImage.open(file).convert('RGB')
+        img_byte = BytesIO(); p_img.save(img_byte, format='JPEG', quality=80); img_byte.seek(0)
+        lista_imgs_final.append({"imagen": img_byte, "descripcion": d_u})
 
     datos = {"orden": orden_id, "cliente": f_cliente, "factura": f_fac, "fecha_factura": f_fec_fac, "producto": f_prod, "serie": f_serie, "tecnico": f_tecnico, "realizador": f_realizador, "fecha_hoy": date.today(), "rev_fisica": f_rev_fisica, "rev_electro": f_rev_electro, "observaciones": f_obs, "conclusiones": f_concl, "tipo_reporte": tipo_rep}
     st.session_state.pdf_data = generar_pdf(datos, lista_imgs_final)
     st.session_state.txt_data = generar_txt_contenido(datos)
     st.success("✅ Archivos listos")
 
-# DESCARGAS
 if st.session_state.pdf_data:
     st.markdown("---")
     col_a, col_b = st.columns(2)
-    with col_a:
-        st.download_button("📥 Descargar PDF", data=st.session_state.pdf_data, file_name=f"Informe_{orden_id}.pdf", mime="application/pdf", use_container_width=True)
-    with col_b:
-        st.download_button("📝 Descargar TXT", data=st.session_state.txt_data, file_name=f"Status_{orden_id}.txt", mime="text/plain", use_container_width=True)
+    with col_a: st.download_button("📥 Descargar PDF", data=st.session_state.pdf_data, file_name=f"Informe_{orden_id}.pdf", mime="application/pdf", use_container_width=True)
+    with col_b: st.download_button("📝 Descargar TXT", data=st.session_state.txt_data, file_name=f"Status_{orden_id}.txt", mime="text/plain", use_container_width=True)
