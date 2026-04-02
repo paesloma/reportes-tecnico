@@ -11,7 +11,7 @@ from reportlab.lib.styles import ParagraphStyle
 from reportlab.platypus import SimpleDocTemplate, Paragraph, Spacer, Image, Table, TableStyle
 from reportlab.lib.units import inch
 from reportlab.lib import colors
-from reportlab.pdfgen import canvas
+from reportlab.lib.enums import TA_JUSTIFY
 
 # --- 0. CONFIGURACIÓN DE IA ---
 GROQ_KEY = "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"
@@ -42,7 +42,7 @@ def cargar_datos_servicios():
 
 df_db = cargar_datos_servicios()
 
-# CONSTANTES
+# CONSTANTES DE INTERFAZ
 LISTA_TECNICOS = ["Tec. Xavier Ramón", "Tec. Juan Diego Quezada", "Tec. Javier Quiguango", "Tec. Wilson Quiguango", "Tec. Carlos Jama", "Tec. Manuel Vera", "Tec. Juan Farez", "Tec. Santiago Farez"]
 LISTA_REALIZADORES = ["Ing. Henry Beltran", "Ing. Pablo Lopez", "Ing. Christian Calle", "Ing. Guillermo Ortiz"]
 OPCIONES_REPORTE = ["FUERA DE GARANTIA", "INFORME TECNICO", "RECLAMO AL PROVEEDOR"]
@@ -56,33 +56,26 @@ TEXTOS_CONCLUSIONES = {
 # --- 3. FUNCIONES DE GENERACIÓN ---
 
 def añadir_marca_agua(canvas, doc):
-    """Agrega la marca de agua en el fondo de cada página."""
     if os.path.exists("marca_agua.png"):
         canvas.saveState()
-        # Ajusta opacidad si es necesario (ReportLab no tiene opacidad nativa fácil para imágenes, 
-        # se recomienda que el PNG ya sea traslúcido)
-        canvas.drawImage("marca_agua.png", 1.5*inch, 2.5*inch, width=5*inch, height=5*inch, mask='auto')
+        canvas.drawImage("marca_agua.png", 1.25*inch, 2.5*inch, width=6*inch, height=6*inch, mask='auto')
         canvas.restoreState()
-
-def generar_txt(datos):
-    contenido = f"RESUMEN TÉCNICO - ORDEN {datos['orden']}\n" + "-"*30 + "\n"
-    contenido += f"Cliente: {datos['cliente']}\nProducto: {datos['producto']}\nSerie: {datos['serie']}\n"
-    contenido += f"Técnico: {datos['tecnico']}\n\n1. REVISIÓN FÍSICA:\n{datos['rev_fisica']}\n\n"
-    contenido += f"2. ANÁLISIS:\n{datos['rev_electro']}\n\n4. CONCLUSIONES:\n{datos['conclusiones']}"
-    return contenido.encode('utf-8')
 
 def generar_pdf(datos, fotos):
     buffer = BytesIO()
     doc = SimpleDocTemplate(buffer, pagesize=letter, topMargin=0.4*inch, bottomMargin=0.4*inch, leftMargin=0.5*inch, rightMargin=0.5*inch)
+    
+    # ESTILOS CON JUSTIFICACIÓN Y ESPACIADO
     color_azul = colors.HexColor("#0056b3")
     est_titulo = ParagraphStyle('T', fontSize=16, alignment=1, fontName='Helvetica-Bold', textColor=color_azul)
-    est_sec = ParagraphStyle('S', fontSize=10, fontName='Helvetica-Bold', textColor=colors.white, backColor=color_azul, borderPadding=2, spaceBefore=8)
-    est_txt = ParagraphStyle('TXT', fontSize=9, fontName='Helvetica', leading=11)
+    est_sec = ParagraphStyle('S', fontSize=10, fontName='Helvetica-Bold', textColor=colors.white, backColor=color_azul, borderPadding=4, spaceBefore=12, spaceAfter=6)
+    est_txt = ParagraphStyle('TXT', fontSize=9, fontName='Helvetica', leading=12, alignment=TA_JUSTIFY, leftIndent=5, rightIndent=5)
     
     story = []
-    # Encabezado
+    
+    # Encabezado Logos
     if os.path.exists("logo.png") and os.path.exists("logo_derecho.png"):
-        header = Table([[Image("logo.png", width=1.4*inch, height=0.55*inch), Image("logo_derecho.png", width=1.4*inch, height=0.55*inch)]], colWidths=[3.7*inch, 3.7*inch])
+        header = Table([[Image("logo.png", width=1.5*inch, height=0.6*inch), Image("logo_derecho.png", width=1.5*inch, height=0.6*inch)]], colWidths=[3.7*inch, 3.7*inch])
         header.setStyle(TableStyle([('ALIGN', (1,0), (1,0), 'RIGHT')]))
         story.append(header)
 
@@ -90,25 +83,36 @@ def generar_pdf(datos, fotos):
     story.append(Paragraph("INFORME TÉCNICO DE SERVICIO", est_titulo))
     story.append(Spacer(1, 15))
     
+    # Tabla de Datos Principales
     info = [[f"Orden: {datos['orden']}", f"Factura: {datos['factura']}"],
             [f"Cliente: {datos['cliente']}", f"Producto: {datos['producto']}"],
             [f"Serie: {datos['serie']}", f"Fecha Reporte: {datos['fecha_hoy']}"]]
     t = Table(info, colWidths=[3.7*inch, 3.7*inch])
-    t.setStyle(TableStyle([('GRID', (0,0), (-1,-1), 0.5, colors.lightgrey), ('FONTSIZE', (0,0), (-1,-1), 9)]))
+    t.setStyle(TableStyle([('GRID', (0,0), (-1,-1), 0.5, colors.lightgrey), ('FONTSIZE', (0,0), (-1,-1), 9), ('PADDING', (0,0), (-1,-1), 4)]))
     story.append(t)
 
-    for tit, cont in [("1. Revisión Física", datos['rev_fisica']), ("2. Revisión Técnica", datos['rev_electro']), 
-                      ("3. Observaciones", datos['observaciones']), ("4. Conclusiones", datos['conclusiones'])]:
+    # Secciones con Justificación
+    secciones = [
+        ("1. Revisión Física", datos['rev_fisica']),
+        ("2. Revisión Técnica", datos['rev_electro']),
+        ("3. Observaciones", datos['observaciones']),
+        ("4. Conclusiones", datos['conclusiones'])
+    ]
+
+    for tit, cont in secciones:
         story.append(Paragraph(tit, est_sec))
         story.append(Paragraph(cont.replace('\n', '<br/>'), est_txt))
     
+    # Evidencia Fotográfica Justificada
     if fotos:
         story.append(Paragraph("EVIDENCIA FOTOGRÁFICA", est_sec))
         for f in fotos:
-            img = Image(BytesIO(f['data']), width=2.4*inch, height=1.7*inch)
-            story.append(Table([[img, Paragraph(f['desc'], est_txt)]], colWidths=[2.6*inch, 4.4*inch]))
+            img = Image(BytesIO(f['data']), width=2.5*inch, height=1.8*inch)
+            # Tabla para alinear imagen y texto descriptivo justificado
+            ft = Table([[img, Paragraph(f['desc'], est_txt)]], colWidths=[2.7*inch, 4.3*inch])
+            ft.setStyle(TableStyle([('VALIGN', (0,0), (-1,-1), 'TOP'), ('BOTTOMPADDING', (0,0), (-1,-1), 10)]))
+            story.append(ft)
 
-    # Se construye el PDF llamando a la función de marca de agua en cada página
     doc.build(story, onLaterPages=añadir_marca_agua, onFirstPage=añadir_marca_agua)
     buffer.seek(0)
     return buffer.read()
@@ -137,13 +141,13 @@ with col2:
     f_fec_hoy = st.date_input("Fecha Reporte", value=date.today())
     f_serie = st.text_input("Serie/Artículo", value=s_v)
 
-f_daño = st.text_area("🔧 Daño detectado (IA)", placeholder="Describa el fallo...")
+f_daño = st.text_area("🔧 Daño detectado (Uso interno/IA)", placeholder="Describa el fallo...")
 f_rev_fisica = st.text_area("1. Revisión Física", value=f"Ingresa a servicio técnico {f_prod}. Se observa el uso continuo del artículo.")
 
 if st.button("🤖 Autocompletar con IA"):
     if f_daño:
-        with st.spinner("Analizando..."):
-            prompt = f"Analiza: {f_daño} en {f_prod}. Genera REVISION_TEC: [pasos] y OBSERVACIONES: [hallazgos]. Sin asteriscos."
+        with st.spinner("IA analizando..."):
+            prompt = f"Analiza: {f_daño} en {f_prod}. Genera REVISION_TEC: [pasos] y OBSERVACIONES: [hallazgos]. No uses asteriscos."
             resp = client.chat.completions.create(messages=[{"role": "user", "content": prompt}], model="llama-3.3-70b-versatile")
             clean = resp.choices[0].message.content.replace("*", "").strip()
             if "REVISION_TEC:" in clean:
@@ -151,11 +155,11 @@ if st.button("🤖 Autocompletar con IA"):
                 st.session_state.ai_obs = clean.split("OBSERVACIONES:")[1].strip()
             st.rerun()
 
-f_rev_electro = st.text_area("2. Análisis Técnico", value=st.session_state.ai_rev_electro)
+f_rev_electro = st.text_area("2. Revisión Técnica", value=st.session_state.ai_rev_electro)
 f_obs = st.text_area("3. Observaciones", value=st.session_state.ai_obs)
 f_concl = st.text_area("4. Conclusiones", value=TEXTOS_CONCLUSIONES.get(f_tipo, ""))
 
-# --- EVIDENCIA Y BORRADO ---
+# --- EVIDENCIA ---
 st.subheader("🖼️ Evidencia Fotográfica")
 up_files = st.file_uploader("Subir imágenes", type=['jpg','png','jpeg'], accept_multiple_files=True, key=f"up_{st.session_state.uploader_key}")
 
@@ -174,16 +178,16 @@ for i, foto in enumerate(st.session_state.lista_fotos):
             st.session_state.uploader_key += 1
             st.rerun()
 
-# --- ACCIONES FINALES ---
+# --- ACCIONES ---
 if st.button("💾 GENERAR ARCHIVOS", use_container_width=True):
     datos = {"orden": orden_id, "cliente": f_cliente, "factura": f_fac, "producto": f_prod, "serie": f_serie, "tecnico": f_tecnico, "realizador": f_realizador, "fecha_hoy": f_fec_hoy, "rev_fisica": f_rev_fisica, "rev_electro": f_rev_electro, "observaciones": f_obs, "conclusiones": f_concl}
     st.session_state.pdf_data = generar_pdf(datos, st.session_state.lista_fotos)
-    st.session_state.txt_data = generar_txt(datos)
-    st.success("✅ Archivos listos")
+    # Generación simple de TXT
+    txt_str = f"ORDEN: {orden_id}\nCLIENTE: {f_cliente}\n\n1. FISICA:\n{f_rev_fisica}\n\n2. TECNICA:\n{f_rev_electro}\n\n4. CONCLU:\n{f_concl}"
+    st.session_state.txt_data = txt_str.encode('utf-8')
+    st.success("✅ Documentos generados con éxito")
 
-if st.session_state.pdf_data and st.session_state.txt_data:
+if st.session_state.pdf_data:
     col_a, col_b = st.columns(2)
-    with col_a:
-        st.download_button("📥 Descargar PDF", data=st.session_state.pdf_data, file_name=f"Reporte_{orden_id}.pdf", mime="application/pdf", use_container_width=True)
-    with col_b:
-        st.download_button("📥 Descargar TXT", data=st.session_state.txt_data, file_name=f"Resumen_{orden_id}.txt", mime="text/plain", use_container_width=True)
+    col_a.download_button("📥 Descargar PDF", data=st.session_state.pdf_data, file_name=f"Reporte_{orden_id}.pdf", mime="application/pdf", use_container_width=True)
+    col_b.download_button("📥 Descargar TXT", data=st.session_state.txt_data, file_name=f"Resumen_{orden_id}.txt", mime="text/plain", use_container_width=True)
