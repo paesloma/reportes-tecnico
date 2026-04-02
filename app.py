@@ -11,7 +11,7 @@ try:
     if "GEMINI_API_KEY" in st.secrets:
         genai.configure(api_key=st.secrets["GEMINI_API_KEY"])
         # Cambiamos a 'gemini-pro' que es el más estable para evitar errores 404
-        model = genai.GenerativeModel('gemini-pro')
+         model = genai.GenerativeModel('gemini-2.0-flash')
         ia_disponible = True
     else:
         st.error("Falta la GEMINI_API_KEY en los Secrets de Streamlit.")
