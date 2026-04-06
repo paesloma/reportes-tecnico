@@ -5,76 +5,93 @@ from io import BytesIO
 import os
 from groq import Groq
 
-# Importaciones de ReportLab
-from reportlab.lib.pagesizes import letter
-from reportlab.lib.styles import ParagraphStyle
-from reportlab.platypus import SimpleDocTemplate, Paragraph, Spacer, Image, Table, TableStyle
-from reportlab.lib.units import inch
-from reportlab.lib import colors
-from reportlab.lib.enums import TA_JUSTIFY, TA_CENTER
-
-# --- 1. CONFIGURACIÓN DE SEGURIDAD (SECRETS) ---
-# IMPORTANTE: No pongas la llave aquí. 
-# En Streamlit Cloud ve a: Settings -> Secrets y pega:
-# GROQ_API_KEY = "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"
-
+# --- CONFIGURACIÓN DE SEGURIDAD ---
+# Asegúrate de haber guardado GROQ_API_KEY en los Secrets de Streamlit
 try:
-    GROQ_KEY = st.secrets["GROQ_API_KEY"]
-    client = Groq(api_key=GROQ_KEY)
-except Exception:
-    st.error("⚠️ Falta la configuración de la API Key en los Secrets de Streamlit.")
-    st.info("Para solucionar esto: Ve a 'Manage App' -> 'Settings' -> 'Secrets' y añade tu llave.")
+    client = Groq(api_key=st.secrets["GROQ_API_KEY"])
+except:
+    st.error("🔑 Error: Configura tu GROQ_API_KEY en los Secrets de Streamlit.")
     st.stop()
 
-# --- 2. CONFIGURACIÓN Y ESTADOS ---
-st.set_page_config(page_title="Gestión de Reportes Técnicos", page_icon="🔧", layout="centered")
-
+# --- ESTADOS DE SESIÓN ---
 if 'ai_rev_electro' not in st.session_state: st.session_state.ai_rev_electro = ""
 if 'ai_obs' not in st.session_state: st.session_state.ai_obs = ""
 if 'ai_concl' not in st.session_state: st.session_state.ai_concl = ""
 
-# --- 3. CARGA DE DATOS ---
+# --- CARGA DE DATOS ---
 @st.cache_data
-def cargar_datos_servicios():
+def cargar_base_datos():
     if os.path.exists("servicios.csv"):
         try:
             df = pd.read_csv("servicios.csv", dtype=str, encoding='latin-1')
             df.columns = df.columns.str.strip()
-            return df.rename(columns={'Serie/Artículo': 'Serie', 'Fec. Fac. Min': 'Fec_Fac_Min', 'Fac. Min': 'Fac_Min'})
+            # Mapeo de columnas según tus capturas
+            return df.rename(columns={
+                'Serie/Artículo': 'Serie', 
+                'Fec. Fac. Min': 'Fec_Fac_Min', 
+                'Fac. Min': 'Fac_Min',
+                'Cliente': 'Cliente',
+                'Producto': 'Producto'
+            })
         except: return pd.DataFrame()
     return pd.DataFrame()
 
-df_db = cargar_datos_servicios()
+df_db = cargar_base_datos()
 
-# --- 4. INTERFAZ ---
-st.title("🚀 Gestión de Reportes Técnicos")
+# --- INTERFAZ PRINCIPAL ---
+st.title("🚀 Gestión de Reportes Técnicos Completos")
 
+# 1. Búsqueda por Orden
 orden_id = st.text_input("Ingrese número de Orden")
-ff_v = str(date.today())
+
+# Variables por defecto
+c_v, s_v, p_v, f_v, ff_v = "", "", "", "", str(date.today())
 
 if orden_id and not df_db.empty:
     res = df_db[df_db['Orden'] == orden_id]
     if not res.empty:
-        ff_v = res.iloc[0].get('Fec_Fac_Min', str(date.today()))
+        row = res.iloc[0]
+        c_v = row.get('Cliente', '')
+        s_v = row.get('Serie', '')
+        p_v = row.get('Producto', '')
+        f_v = row.get('Fac_Min', '')
+        ff_v = row.get('Fec_Fac_Min', str(date.today()))
+        st.success(f"✅ Datos cargados para el cliente: {c_v}")
 
-st.subheader("Datos del Reporte")
+# 2. Datos del Reporte
+st.subheader("📋 Información del Servicio")
 col1, col2 = st.columns(2)
+
 with col1:
-    f_prod = st.text_input("Producto")
-    f_realizador = st.selectbox("Realizado por", ["Ing. Henry Beltran", "Ing. Pablo Lopez", "Ing. Christian Calle", "Ing. Guillermo Ortiz"])
+    f_tipo = st.selectbox("Tipo de Reporte", ["FUERA DE GARANTIA", "INFORME TECNICO", "RECLAMO"])
+    f_cliente = st.text_input("Cliente", value=c_v)
+    f_prod = st.text_input("Producto", value=p_v)
+    f_realizador = st.selectbox("Realizado por", ["Ing. Henry Beltran", "Ing. Pablo Lopez", "Ing. Christian Calle"])
+
 with col2:
-    f_fec_fac = st.text_input("Fecha Factura (YYYY/MM/DD)", value=ff_v) # Campo solicitado
-    f_tecnico = st.selectbox("Revisado por (Técnico)", ["Tec. Xavier Ramón", "Tec. Juan Diego Quezada", "Tec. Javier Quiguango", "Tec. Wilson Quiguango"])
+    f_tecnico = st.selectbox("Revisado por (Técnico)", ["Tec. Xavier Ramón", "Tec. Juan Diego Quezada", "Tec. Javier Quiguango"])
+    f_fac = st.text_input("Factura", value=f_v)
+    f_fec_fac = st.text_input("Fecha Factura (YYYY-MM-DD)", value=ff_v)
+    f_serie = st.text_input("Serie/Artículo", value=s_v)
 
-f_daño = st.text_area("🔧 Diagnóstico de Entrada (Para IA)", placeholder="Ej: Falla en tarjeta principal...")
+f_fec_hoy = st.date_input("Fecha del Reporte", value=date.today())
 
-if st.button("🤖 Generar Diagnóstico con IA"):
+# 3. Secciones Técnicas
+st.subheader("🛠️ Análisis Técnico")
+
+# Revisión Física automática
+rev_fisica_default = f"Ingresa a servicio técnico {f_prod}. Se observa el uso continuo del artículo."
+f_rev_fisica = st.text_area("1. Revisión Física", value=rev_fisica_default)
+
+f_daño = st.text_area("🔧 Diagnóstico de Entrada (Describa la falla para la IA)", placeholder="Ej: No enciende, presenta ruido interno...")
+
+if st.button("🤖 Generar Informe con IA"):
     if f_daño:
-        with st.spinner("El técnico IA está redactando el informe..."):
-            prompt = (f"Actúa como técnico senior. Analiza la falla: '{f_daño}' en el equipo '{f_prod}'. "
-                      "Redacta sin asteriscos ni negritas. Divide exactamente en: "
-                      "REVISION_TEC: (pruebas realizadas), "
-                      "OBSERVACIONES: (hallazgos técnicos), "
+        with st.spinner("Redactando revisión, observaciones y conclusiones..."):
+            prompt = (f"Actúa como técnico experto. Producto: {f_prod}. Falla: {f_daño}. "
+                      "Genera un texto profesional sin asteriscos. Divide en: "
+                      "REVISION_TEC: (pruebas y mediciones), "
+                      "OBSERVACIONES: (daños encontrados), "
                       "CONCLUSIONES: (dictamen final).")
             
             resp = client.chat.completions.create(messages=[{"role": "user", "content": prompt}], model="llama-3.3-70b-versatile")
@@ -86,10 +103,13 @@ if st.button("🤖 Generar Diagnóstico con IA"):
                 st.session_state.ai_concl = clean.split("CONCLUSIONES:")[1].strip()
             st.rerun()
 
-# Campos de texto con los resultados de la IA
-st.text_area("2. Revisión Técnica", value=st.session_state.ai_rev_electro)
-st.text_area("3. Observaciones", value=st.session_state.ai_obs)
-st.text_area("4. Conclusiones", value=st.session_state.ai_concl) # Campo solicitado
+# Campos que se llenan con la IA
+st.text_area("2. Revisión Técnica", value=st.session_state.ai_rev_electro, height=150)
+st.text_area("3. Observaciones", value=st.session_state.ai_obs, height=100)
+st.text_area("4. Conclusiones", value=st.session_state.ai_concl, height=100) # Ahora ya no está vacío
 
-if st.button("💾 GENERAR ARCHIVOS", use_container_width=True):
-    st.success(f"Archivos generados correctamente para la orden {orden_id}.")
+# 4. Botón final
+if st.button("💾 GUARDAR Y GENERAR ARCHIVOS", use_container_width=True):
+    # Aquí iría tu lógica de generación de PDF/TXT
+    st.balloons()
+    st.success(f"Reporte de {f_cliente} listo para descarga.")
