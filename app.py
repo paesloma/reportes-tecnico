@@ -173,10 +173,10 @@ with c_ia:
         try:
             client = Groq(api_key=st.secrets["GROQ_API_KEY"]) 
             prompt_sistema = """Eres un perito técnico experto. Redacta reportes siguiendo estrictamente este formato:
-            **Procedimiento de inspección:** (Pasos realizados)
-            **Resultados:** (Hallazgos técnicos)
-            **Conclusión:** (Determinación final del origen del daño)
-            **Recomendaciones:** (Consejos de uso para el cliente)
+            Procedimiento de inspección: (Pasos realizados)
+            Resultados: (Hallazgos técnicos)
+            Conclusión: (Determinación final del origen del daño)
+            Recomendaciones: (Consejos de uso para el cliente)
             Usa un tono profesional e imparcial."""
 
             chat = client.chat.completions.create(
