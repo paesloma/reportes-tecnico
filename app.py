@@ -236,12 +236,22 @@ f_obs = st.text_area("4. Observaciones", value=st.session_state.texto_obs, heigh
 texto_conclusiones_default = TEXTOS_CONCLUSIONES.get(tipo_rep, "")
 f_concl = st.text_area("5. Conclusiones", value=texto_conclusiones_default, height=150)
 
-# --- SECCIÓN DE IMÁGENES INTERACTIVA (MODIFICADA PARA BORRAR) ---
+# --- SECCIÓN DE IMÁGENES INTERACTIVA (MODIFICADA PARA BORRAR REALMENTE) ---
 st.markdown("---")
 st.markdown("### 📸 Evidencia Fotográfica")
-uploaded_files = st.file_uploader("Subir imágenes", type=['jpg','png','jpeg'], accept_multiple_files=True)
 
-# Guardar imágenes nuevas en memoria para que persistan y se puedan borrar
+# Generamos una clave dinámica para "limpiar" el uploader tras procesar las imágenes
+if 'uploader_key' not in st.session_state:
+    st.session_state.uploader_key = 0
+
+uploaded_files = st.file_uploader(
+    "Subir imágenes", 
+    type=['jpg','png','jpeg'], 
+    accept_multiple_files=True,
+    key=f"uploader_{st.session_state.uploader_key}"
+)
+
+# Al subir archivos nuevos, los mudamos a la memoria persistente y limpiamos el uploader
 if uploaded_files:
     for file in uploaded_files:
         if not any(img['name'] == file.name for img in st.session_state.imagenes_guardadas):
@@ -250,28 +260,38 @@ if uploaded_files:
                 "bytes": file.read(), 
                 "desc": "Evidencia técnica."
             })
+    # Incrementamos la clave para vaciar el widget visual de subida
+    st.session_state.uploader_key += 1
+    st.rerun()
 
-imagenes_a_borrar = []
-
+# Renderizado de las miniaturas con su botón de eliminar
 if st.session_state.imagenes_guardadas:
     st.info("📝 Edita la descripción o elimina la imagen si no la necesitas:")
-    for idx, img_data in enumerate(st.session_state.imagenes_guardadas):
+    
+    # Usamos un bucle clásico para evitar colisiones de índices al borrar
+    i = 0
+    while i < len(st.session_state.imagenes_guardadas):
+        img_data = st.session_state.imagenes_guardadas[i]
         c_img, c_desc, c_btn = st.columns([1, 3, 1])
+        
         with c_img:
             st.image(img_data["bytes"], use_container_width=True)
+            
         with c_desc:
             # Sincronizamos la descripción en la memoria directamente
-            st.session_state.imagenes_guardadas[idx]["desc"] = st.text_input(f"Descripción Imagen #{idx+1}", value=img_data["desc"], key=f"desc_{idx}_{img_data['name']}")
+            st.session_state.imagenes_guardadas[i]["desc"] = st.text_input(
+                f"Descripción Imagen #{i+1}", 
+                value=img_data["desc"], 
+                key=f"desc_{i}_{img_data['name']}"
+            )
+            
         with c_btn:
             st.write("") # Espaciador para centrar verticalmente
-            if st.button("🗑️ Eliminar", key=f"del_{idx}_{img_data['name']}"):
-                imagenes_a_borrar.append(idx)
-    
-    # Procesar borrado y recargar la interfaz
-    if imagenes_a_borrar:
-        for idx in sorted(imagenes_a_borrar, reverse=True):
-            st.session_state.imagenes_guardadas.pop(idx)
-        st.rerun()
+            st.write("") 
+            if st.button("🗑️ Eliminar", key=f"del_{i}_{img_data['name']}"):
+                st.session_state.imagenes_guardadas.pop(i)
+                st.rerun()
+        i += 1
 
 st.markdown("---")
 
