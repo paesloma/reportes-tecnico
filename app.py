@@ -90,9 +90,13 @@ def generar_pdf(datos, lista_imgs):
     t.setStyle(TableStyle([('GRID', (0,0), (-1,-1), 0.5, colors.lightgrey), ('VALIGN', (0,0), (-1,-1), 'MIDDLE')]))
     story.append(t)
 
-    secciones = [("1. Revisión Física", datos['rev_fisica']), ("2. Ingresa a servicio técnico", datos['ingreso_tec']), 
-                 ("3. Revisión electro-electrónica-mecanica", datos['rev_electro']), ("4. Observaciones", datos['observaciones']), 
-                 ("5. Conclusiones", datos['conclusiones'])]
+    # SECCIÓN ACTUALIZADA (Sin Ingreso a Servicio Técnico)
+    secciones = [
+        ("1. Revisión Física", datos['rev_fisica']), 
+        ("2. Revisión electro-electrónica-mecanica", datos['rev_electro']), 
+        ("3. Observaciones", datos['observaciones']), 
+        ("4. Conclusiones", datos['conclusiones'])
+    ]
 
     for tit, cont in secciones:
         story.append(Paragraph(tit, est_sec))
@@ -119,7 +123,11 @@ def generar_pdf(datos, lista_imgs):
 
 def generar_txt_contenido(datos):
     fac_txt = "STOCK" if str(datos['factura']).strip() == "0" else datos['factura']
-    return f"Estimados\n\n... (resto del texto igual) ...\nAtentamente,\n{datos['realizador']}\nCoordinador Postventa"
+    return (
+        f"CLIENTE: {datos['cliente']}\nFACTURA: {fac_txt}\nORDEN: {datos['orden']}\n"
+        f"PRODUCTO: {datos['producto']}\nSERIE: {datos['serie']}\n\n"
+        f"OBSERVACIONES:\n{datos['observaciones']}\n\nCONCLUSIONES:\n{datos['conclusiones']}"
+    )
 
 # --- 4. INTERFAZ ---
 st.title("🚀 Gestión de Reportes Técnicos")
@@ -149,30 +157,31 @@ with col2:
     f_serie = st.text_input("Serie/Artículo", value=s_v)
 
 f_rev_fisica = st.text_area("1. Revisión Física", value=f"Ingresa a servicio técnico {f_prod}. Se observa el uso continuo del artículo.")
-f_ingreso_tec = st.text_area("2. Ingresa a servicio técnico")
-f_rev_electro = st.text_area("3. Revisión electro-electrónica-mecanica", value="Se procede a revisar el sistema de alimentación de energía...\nSe procede a revisar el sistema mecanico de equipo")
+# SECCIÓN ELIMINADA: Ingresa a servicio técnico
+f_rev_electro = st.text_area("2. Revisión electro-electrónica-mecanica", value="Se procede a revisar el sistema de alimentación de energía...\nSe procede a revisar el sistema mecanico de equipo")
 
-# --- BLOQUE IA (SIN PEDIR LLAVE) ---
+# --- BLOQUE IA CON EXPANDER ---
 st.markdown("---")
 st.markdown("### 🤖 Asistente de Observaciones")
 falla_breve = st.text_input("Describe la falla para la IA:")
 
 if st.button("✨ Generar Observación con IA"):
     try:
-        # Busca la llave en secrets o variables de entorno automáticamente
         client = Groq(api_key=st.secrets["GROQ_API_KEY"]) 
         chat = client.chat.completions.create(
-            messages=[{"role": "system", "content": "Eres un perito técnico. Redacta una observación profesional."},
+            messages=[{"role": "system", "content": "Eres un perito técnico. Redacta una observación profesional y extensa."},
                       {"role": "user", "content": f"Falla: {falla_breve}"}],
             model="llama-3.3-70b-versatile",
         )
         st.session_state.texto_ia_obs = chat.choices[0].message.content
         st.rerun()
-    except Exception as e:
-        st.error("Error: Verifica que la API Key esté configurada en los Secrets de Streamlit.")
+    except: st.error("Error al conectar con Groq.")
 
-f_obs = st.text_area("4. Observaciones", value=st.session_state.texto_ia_obs)
-f_concl = st.text_area("5. Conclusiones", value=TEXTOS_CONCLUSIONES.get(tipo_rep, ""), height=150)
+# Implementación de botón pequeño (Expander) para ver todo el texto
+with st.expander("🔍 Ver/Editar Observaciones Completas", expanded=True):
+    f_obs = st.text_area("3. Detalle de Observaciones", value=st.session_state.texto_ia_obs, height=200)
+
+f_concl = st.text_area("4. Conclusiones", value=TEXTOS_CONCLUSIONES.get(tipo_rep, ""), height=150)
 
 # --- IMÁGENES CON BORRADO ---
 st.markdown("---")
@@ -194,10 +203,25 @@ if st.session_state.imagenes_guardadas:
                 st.session_state.imagenes_guardadas.pop(idx)
                 st.rerun()
 
-# --- GENERACIÓN Y DESCARGA (IGUAL A TU CÓDIGO) ---
+# --- GENERACIÓN ---
 if st.button("💾 GENERAR ARCHIVOS", use_container_width=True):
-    # ... (Misma lógica de procesamiento que ya tenías) ...
+    lista_imgs_final = []
+    for img_item in st.session_state.imagenes_guardadas:
+        img_byte = BytesIO(img_item["bytes"])
+        lista_imgs_final.append({"imagen": img_byte, "descripcion": img_item["desc"]})
+
+    datos = {
+        "orden": orden_id, "cliente": f_cliente, "factura": f_fac, "fecha_factura": f_fec_fac,
+        "producto": f_prod, "serie": f_serie, "tecnico": f_tecnico, "realizador": f_realizador,
+        "fecha_hoy": date.today(), "rev_fisica": f_rev_fisica, "rev_electro": f_rev_electro, 
+        "observaciones": f_obs, "conclusiones": f_concl, "tipo_reporte": tipo_rep
+    }
+
+    st.session_state.pdf_data = generar_pdf(datos, lista_imgs_final)
+    st.session_state.txt_data = generar_txt_contenido(datos)
     st.success("✅ Archivos generados correctamente")
 
 if st.session_state.pdf_data:
-    st.download_button("Descargar PDF", data=st.session_state.pdf_data, file_name=f"Informe_{orden_id}.pdf", mime="application/pdf")
+    col_a, col_b = st.columns(2)
+    with col_a: st.download_button("Descargar PDF", data=st.session_state.pdf_data, file_name=f"Informe_{orden_id}.pdf", mime="application/pdf", use_container_width=True)
+    with col_b: st.download_button("Descargar TXT", data=st.session_state.txt_data, file_name=f"Status_{orden_id}.txt", mime="text/plain", use_container_width=True)
