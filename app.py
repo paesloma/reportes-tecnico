@@ -20,7 +20,7 @@ if 'txt_data' not in st.session_state: st.session_state.txt_data = None
 if 'imagenes_guardadas' not in st.session_state: st.session_state.imagenes_guardadas = []
 # Estructura base solicitada para la IA
 if 'texto_ia_obs' not in st.session_state: 
-    st.session_state.texto_ia_obs = "**Procedimiento de inspección:**\n\n**Resultados:**\n\n**Conclusión:**\n\n**Recomendaciones:**"
+    st.session_state.texto_ia_obs = "Procedimiento de inspección:\n\nResultados:\n\nConclusión:\n\nRecomendaciones:"
 
 # --- 2. CARGA DE DATOS ---
 @st.cache_data
