@@ -1,7 +1,7 @@
 import streamlit as st
 import pandas as pd
 from datetime import date
-from io import BytesIO
+from io import BytesIO, StringIO
 import os
 from groq import Groq
 
@@ -9,91 +9,82 @@ from groq import Groq
 try:
     client = Groq(api_key=st.secrets["GROQ_API_KEY"])
 except:
-    st.error("🔑 Error: Configura la GROQ_API_KEY en los Secrets de Streamlit.")
+    st.error("🔑 Error: Configure la API Key en los Secrets de Streamlit.")
     st.stop()
 
-# --- 2. LISTADOS COMPLETOS DE PERSONAL ---
-# Listado de los 8 técnicos que coordinas
-LISTA_TECNICOS = [
-    "Tec. Xavier Ramón", 
-    "Tec. Juan Diego Quezada", 
-    "Tec. Javier Quiguango", 
-    "Tec. Wilson Quiguango", 
-    "Tec. Carlos Jama", 
-    "Tec. Manuel Vera", 
-    "Tec. Juan Farez", 
-    "Tec. Santiago Farez"
-]
+# --- 2. PERSONAL Y OPCIONES ---
+LISTA_TECNICOS = ["Tec. Xavier Ramón", "Tec. Juan Diego Quezada", "Tec. Javier Quiguango", "Tec. Wilson Quiguango", "Tec. Carlos Jama", "Tec. Manuel Vera", "Tec. Juan Farez", "Tec. Santiago Farez"]
+LISTA_REALIZADORES = ["Ing. Henry Beltran", "Ing. Pablo Lopez", "Ing. Christian Calle", "Ing. Guillermo Ortiz"]
+OPCIONES_REPORTE = ["FUERA DE GARANTIA", "INFORME TECNICO", "RECLAMO AL PROVEEDOR"]
 
-# Listado de ingenieros realizadores
-LISTA_REALIZADORES = [
-    "Ing. Henry Beltran", 
-    "Ing. Pablo Lopez", 
-    "Ing. Christian Calle", 
-    "Ing. Guillermo Ortiz"
-]
-
-# --- 3. CARGA DE DATOS DESDE CSV ---
-@st.cache_data
-def cargar_db():
-    if os.path.exists("servicios.csv"):
-        try:
-            df = pd.read_csv("servicios.csv", dtype=str, encoding='latin-1')
-            df.columns = df.columns.str.strip()
-            return df.rename(columns={
-                'Serie/Artículo': 'Serie', 
-                'Fec. Fac. Min': 'Fec_Fac_Min', 
-                'Fac. Min': 'Fac_Min'
-            })
-        except: return pd.DataFrame()
-    return pd.DataFrame()
-
-df_db = cargar_db()
+# --- 3. ESTADOS DE SESIÓN (Persistencia de datos) ---
+if 'resumen_ia' not in st.session_state:
+    st.session_state.resumen_ia = {"rev": "", "obs": "", "con": ""}
 
 # --- 4. INTERFAZ ---
-st.title("🔧 Sistema de Reportes - Post-Venta")
+st.title("📥 Generador de Reportes Técnicos")
 
-orden_id = st.text_input("Ingrese número de Orden")
-
-# Autocompletado de datos
-c_v, s_v, p_v, f_v, ff_v = "", "", "", "", str(date.today())
-if orden_id and not df_db.empty:
-    res = df_db[df_db['Orden'] == orden_id]
-    if not res.empty:
-        row = res.iloc[0]
-        c_v, s_v, p_v, f_v, ff_v = row.get('Cliente',''), row.get('Serie',''), row.get('Producto',''), row.get('Fac_Min',''), row.get('Fec_Fac_Min', ff_v)
+# Selección de Tipo (Influye en las conclusiones)
+f_tipo = st.selectbox("Tipo de Reporte", options=OPCIONES_REPORTE)
 
 col1, col2 = st.columns(2)
 with col1:
-    f_realizador = st.selectbox("Realizado por", LISTA_REALIZADORES) # Ahora con la lista completa
-    f_cliente = st.text_input("Cliente", value=c_v)
-    f_prod = st.text_input("Producto", value=p_v)
+    f_orden = st.text_input("Orden #")
+    f_cliente = st.text_input("Cliente")
+    f_realizador = st.selectbox("Realizado por", LISTA_REALIZADORES)
 with col2:
-    f_tecnico = st.selectbox("Revisado por (Técnico)", LISTA_TECNICOS) # Los 8 técnicos incluidos
-    f_fac = st.text_input("Factura", value=f_v)
-    f_fec_fac = st.text_input("Fecha Factura", value=ff_v)
-    f_serie = st.text_input("Serie", value=s_v)
+    f_prod = st.text_input("Producto")
+    f_tecnico = st.selectbox("Revisado por", LISTA_TECNICOS)
+    f_fec = st.date_input("Fecha", value=date.today())
 
-# --- 5. GENERACIÓN CON IA ---
-st.subheader("📝 Análisis de Falla")
-f_daño = st.text_area("Describa el problema para la IA")
+f_daño = st.text_area("🔧 Diagnóstico de Entrada")
 
-if st.button("🤖 Generar Diagnóstico Profesional"):
+if st.button("🤖 Generar con IA"):
     if f_daño:
-        with st.spinner("Redactando informe..."):
-            prompt = (f"Como experto en línea blanca y tecnología, analiza: {f_daño}. "
-                      "Genera: REVISION_TEC, OBSERVACIONES y CONCLUSIONES.")
+        with st.spinner("Analizando según tipo de reporte..."):
+            # Lógica de conclusión basada en el tipo de informe
+            if f_tipo == "RECLAMO AL PROVEEDOR":
+                meta = "Enfatizar falla de fabricación para reposición."
+            elif f_tipo == "FUERA DE GARANTIA":
+                meta = "Enfatizar desgaste por uso o daño externo no cubierto."
+            else:
+                meta = "Dictamen técnico estándar."
+
+            prompt = (f"Producto: {f_prod}. Falla: {f_daño}. Tipo: {f_tipo}. Objetivo: {meta}. "
+                      "Estructura: REVISION_TEC, OBSERVACIONES, CONCLUSIONES. Sin asteriscos.")
+            
             resp = client.chat.completions.create(messages=[{"role": "user", "content": prompt}], model="llama-3.3-70b-versatile")
             clean = resp.choices[0].message.content.strip()
             
-            # Guardar en session_state para que no se borre al recargar
             if "REVISION_TEC:" in clean:
-                st.session_state.rev = clean.split("REVISION_TEC:")[1].split("OBSERVACIONES:")[0].strip()
-                st.session_state.obs = clean.split("OBSERVACIONES:")[1].split("CONCLUSIONES:")[0].strip()
-                st.session_state.con = clean.split("CONCLUSIONES:")[1].strip()
+                st.session_state.resumen_ia["rev"] = clean.split("REVISION_TEC:")[1].split("OBSERVACIONES:")[0].strip()
+                st.session_state.resumen_ia["obs"] = clean.split("OBSERVACIONES:")[1].split("CONCLUSIONES:")[0].strip()
+                st.session_state.resumen_ia["con"] = clean.split("CONCLUSIONES:")[1].strip()
             st.rerun()
 
-# Mostrar resultados
-st.text_area("2. Revisión Técnica", value=st.session_state.get('rev', ""))
-st.text_area("3. Observaciones", value=st.session_state.get('obs', ""))
-st.text_area("4. Conclusiones", value=st.session_state.get('con', "")) # Campo conclusiones corregido
+# Mostrar campos generados (Permite edición manual antes de bajar)
+st.text_area("2. Revisión Técnica", value=st.session_state.resumen_ia["rev"])
+st.text_area("3. Observaciones", value=st.session_state.resumen_ia["obs"])
+st.text_area("4. Conclusiones", value=st.session_state.resumen_ia["con"])
+
+# --- 5. OPCIÓN DE DESCARGA ---
+st.divider()
+if st.session_state.resumen_ia["con"]: # Solo habilita si hay contenido
+    # Creamos el archivo en memoria (Buffer)
+    reporte_txt = (
+        f"TIPO: {f_tipo}\nORDEN: {f_orden}\nCLIENTE: {f_cliente}\nPRODUCTO: {f_prod}\n"
+        f"FECHA: {f_fec}\n----------------------------------\n"
+        f"REVISIÓN: {st.session_state.resumen_ia['rev']}\n\n"
+        f"OBSERVACIONES: {st.session_state.resumen_ia['obs']}\n\n"
+        f"CONCLUSIONES: {st.session_state.resumen_ia['con']}\n\n"
+        f"Realizado por: {f_realizador} | Revisado por: {f_tecnico}"
+    )
+    
+    # Botón de descarga eficiente
+    st.download_button(
+        label="📥 Descargar Reporte (TXT)",
+        data=reporte_txt,
+        file_name=f"Reporte_{f_orden}_{f_tipo.replace(' ', '_')}.txt",
+        mime="text/plain",
+        use_container_width=True
+    )
