@@ -15,7 +15,7 @@ from reportlab.lib import colors
 # --- 1. CONFIGURACIÓN Y PERSISTENCIA ---
 st.set_page_config(page_title="Generador de Reportes", page_icon="🔧", layout="centered")
 
-# Inicialización de estados para evitar errores de referencia y SyntaxError
+# Inicialización de estados para evitar errores de referencia
 if 'pdf_data' not in st.session_state:
     st.session_state.pdf_data = None
 if 'txt_data' not in st.session_state:
@@ -75,6 +75,9 @@ def generar_pdf(datos, lista_imgs):
     est_txt = ParagraphStyle('TXT', fontSize=9, fontName='Helvetica', leading=11)
     est_firma = ParagraphStyle('F', fontSize=10, fontName='Helvetica-Bold', alignment=1)
     
+    # NUEVO ESTILO: Para que la descripción de la figura sea centrada y en negrita (ej. "Figura 1.")
+    est_fig = ParagraphStyle('FIG', fontSize=10, fontName='Helvetica-Bold', alignment=1, spaceBefore=4)
+    
     story = []
 
     # Cabecera
@@ -120,16 +123,50 @@ def generar_pdf(datos, lista_imgs):
         story.append(Paragraph(cont.replace('\n', '<br/>'), est_txt))
         story.append(Spacer(1, 5))
 
+    # --- LÓGICA DE CUADRÍCULA PARA IMÁGENES TIPO "TABLA DE FIGURAS" ---
     if lista_imgs:
         story.append(Paragraph("EVIDENCIA DE IMÁGENES", est_sec))
+        story.append(Spacer(1, 10))
+        
+        datos_cuadricula = []
+        fila_actual = []
+        
         for idx, i in enumerate(lista_imgs):
-            story.append(Spacer(1, 10))
             try:
-                img_obj = Image(i['imagen'], width=2.4*inch, height=1.7*inch)
-                t_img = Table([[img_obj, Paragraph(f"<b>Imagen #{idx+1}:</b><br/>{i['descripcion']}", est_txt)]], colWidths=[2.6*inch, 4.6*inch])
-                story.append(t_img)
-            except:
-                story.append(Paragraph(f"Error cargando imagen {idx+1}", est_txt))
+                # Ajuste de tamaño para asegurar que queden uniformes y proporcionales
+                img_obj = Image(i['imagen'], width=3.4*inch, height=2.2*inch)
+                
+                # Diseño de la celda: Imagen seguida por el texto de "Figura X."
+                celda = [
+                    img_obj,
+                    Spacer(1, 4), # Pequeño espacio entre imagen y texto
+                    Paragraph(f"Figura {idx+1}. {i['descripcion']}", est_fig)
+                ]
+                fila_actual.append(celda)
+                
+                # Cuando tenemos 2 imágenes (columnas), agregamos la fila
+                if len(fila_actual) == 2:
+                    datos_cuadricula.append(fila_actual)
+                    fila_actual = []
+            except Exception as e:
+                fila_actual.append([Paragraph(f"Error cargando imagen {idx+1}", est_txt)])
+                
+        # Si quedó una imagen suelta (impar), completamos la fila con una celda en blanco
+        if fila_actual:
+            fila_actual.append("")
+            datos_cuadricula.append(fila_actual)
+            
+        # Tabla constructora con bordes negros (GRID) para simular la cuadrícula
+        if datos_cuadricula:
+            t_grid = Table(datos_cuadricula, colWidths=[3.7*inch, 3.7*inch])
+            t_grid.setStyle(TableStyle([
+                ('GRID', (0,0), (-1,-1), 1, colors.black),  # Agrega las líneas divisorias y el contorno
+                ('VALIGN', (0,0), (-1,-1), 'MIDDLE'),       # Centrado vertical
+                ('ALIGN', (0,0), (-1,-1), 'CENTER'),        # Centrado horizontal
+                ('PADDING', (0,0), (-1,-1), 6),             # Espaciado interno de las celdas
+            ]))
+            story.append(t_grid)
+    # --- FIN DE LÓGICA DE CUADRÍCULA ---
 
     story.append(Spacer(1, 60))
     t_firmas = Table([[Paragraph("Realizado por:", est_firma), Paragraph("Revisado por:", est_firma)], 
@@ -206,6 +243,7 @@ if uploaded_files:
         with c_img:
             st.image(file, use_container_width=True)
         with c_desc:
+            # Puedes usar "Estado del equipo." o "Serie del equipo." en la interfaz, se agregará el prefijo Figura automáticamente
             desc = st.text_input(f"Descripción Imagen #{idx+1}", value="Evidencia técnica.", key=f"desc_{idx}")
             lista_imgs_temp.append({"file": file, "desc": desc})
 
@@ -218,7 +256,8 @@ if st.button("💾 GENERAR ARCHIVOS", use_container_width=True):
             p_img = PilImage.open(item['file'])
             if p_img.mode != 'RGB': p_img = p_img.convert('RGB')
             img_byte = BytesIO()
-            p_img.save(img_byte, format='JPEG', quality=80)
+            # Mantenemos quality=95 para la mejor resolución posible
+            p_img.save(img_byte, format='JPEG', quality=95)
             img_byte.seek(0)
             imgs_procesadas.append({"imagen": img_byte, "descripcion": item['desc']})
         except Exception as e:
