@@ -42,7 +42,8 @@ df_db = cargar_datos_servicios()
 LISTA_TECNICOS = [
     "Tec. Xavier Ramón", "Tec. Juan Diego Quezada", "Tec. Javier Quiguango",
     "Tec. Wilson Quiguango", "Tec. Carlos Jama", "Tec. Manuel Vera",
-    "Tec. Juan Farez", "Tec. Santiago Farez"
+    "Tec. Juan Farez", "Tec. Santiago Farez"," Tec.Ronald Paladinez", "Tec. Saul Vite",
+    "Tec. Miguel Meza", "Tec German Tenemaza"
 ]
 LISTA_REALIZADORES = ["Ing. Henry Beltran", "Ing. Pablo Lopez ", "Ing. Christian Calle", "Ing. Guillermo Ortiz"]
 OPCIONES_REPORTE = ["FUERA DE GARANTIA", "INFORME TECNICO", "RECLAMO AL PROVEEDOR"]
