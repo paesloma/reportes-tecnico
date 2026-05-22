@@ -49,9 +49,9 @@ LISTA_REALIZADORES = ["Ing. Henry Beltran", "Ing. Pablo Lopez ", "Ing. Christian
 OPCIONES_REPORTE = ["FUERA DE GARANTIA", "INFORME TECNICO", "RECLAMO AL PROVEEDOR"]
 
 TEXTOS_CONCLUSIONES = {
-    "FUERA DE GARANTIA": "En marco de las políticas de garantía que mantienen un orden en el proceso se concluye:\nCon base en estos hallazgos, lamentamos indicarle que el daño identificado no es atribuible a defectos de fabricación o materiales, sino al uso indebido del equipo, lo cual invalida la cobertura de garantía.",
-    "INFORME TECNICO": "En marco de las políticas de garantía que mantienen un orden en el proceso se concluye:\nCon base en estos hallazgos indicamos que el equipo funciona correctamente en base a lo que indica el fabricante",
-    "RECLAMO AL PROVEEDOR": "En marco de las políticas de garantía que mantienen un orden en el proceso se concluye:\nSe concluye que el daño es de fábrica debido a las características presentadas. Solicitamos su colaboración con el reclamo pertinente al proveedor."
+    "FUERA DE GARANTIA": "En marco de las políticas de garantía que mantienen un orden en el proceso se concluye:\nEl daño identificado no es atribuible a defectos de fabricación o materiales, sino al uso indebido del equipo, lo cual invalida la cobertura de garantía.",
+    "INFORME TECNICO": "En marco de las políticas de garantía que mantienen un orden en el proceso se concluye:\nCon base en estos hallazgos se informa que el equipo funciona correctamente en base a las indicaciones de operacion del fabricante",
+    "RECLAMO AL PROVEEDOR": "En marco de las políticas de garantía que mantienen un orden en el proceso se concluye:\nEl daño presentado cooresponde a un defecto de manufacturade debido al diagnostico realizado. Solicitamos su colaboración con el proceso de  Reclamo al Proveedor."
 }
 
 # --- 3. FUNCIONES DE GENERACIÓN ---
@@ -182,7 +182,7 @@ def generar_txt_contenido(datos):
     fac_txt = "STOCK" if str(datos['factura']).strip() in ["0", "nan", ""] else datos['factura']
     return (
         f"Estimados\n\n"
-        f"Me dirijo a usted para indicar el status de estado de la garantía del siguiente producto:\n\n"
+        f"Me dirijo a usted para indicar el estado del siguiente producto:\n\n"
         f"CLIENTE: {datos['cliente']}\n"
         f"FACTURA: {fac_txt}\n"
         f"FECHA DE FACTURA: {datos['fecha_factura']}\n"
@@ -279,6 +279,6 @@ if st.session_state.pdf_data:
     st.markdown("### 📥 Descargas")
     c1, c2 = st.columns(2)
     with c1:
-        st.download_button("Descargar PDF", data=st.session_state.pdf_data, file_name=f"Informe_{orden_id}.pdf", mime="application/pdf", use_container_width=True)
+        st.download_button("Descargar PDF", data=st.session_state.pdf_data, file_name=f"{f_prod}_{f_cliente}_{orden_id}_.pdf", mime="application/pdf", use_container_width=True)
     with c2:
         st.download_button("Descargar TXT", data=st.session_state.txt_data, file_name=f"Status_{orden_id}.txt", mime="text/plain", use_container_width=True)
