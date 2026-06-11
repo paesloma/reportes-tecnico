@@ -45,7 +45,7 @@ LISTA_TECNICOS = [
     "Tec. Juan Farez", "Tec. Santiago Farez"," Tec.Ronald Paladinez", "Tec. Saul Vite",
     "Tec. Miguel Meza", "Tec German Tenemaza", "CISTRONIC", "Taller Externo"
 ]
-LISTA_REALIZADORES = ["Ing. Henry Beltran", "Ing. Pablo Lopez ", "Ing. Christian Calle", "Ing. Guillermo Ortiz"]
+LISTA_REALIZADORES = ["Ing. Henry Beltran", "Ing. Pablo Lopez ", "Ing. Christian Calle", "Ing. Guillermo Ortiz","Ing. Andrian Aguilar","Ing. Johnn Juela"]
 OPCIONES_REPORTE = ["FUERA DE GARANTIA", "INFORME TECNICO", "RECLAMO AL PROVEEDOR"]
 
 TEXTOS_CONCLUSIONES = {
