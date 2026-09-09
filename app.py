@@ -14,7 +14,7 @@ from reportlab.lib import colors
 
 # Importaciones de python-docx (Word)
 from docx import Document
-from docx.shared import Inches, Pt
+from docx.shared import Inches, Pt, RGBColor
 from docx.enum.text import WD_ALIGN_PARAGRAPH
 
 # Importación de traductor gratuito (Sin API Key)
@@ -64,11 +64,11 @@ TEXTOS_CONCLUSIONES = {
 
 # --- 3. FUNCIONES DE TRADUCCIÓN ---
 def traducir_texto(texto, idioma):
-    if idioma == "Español" or not texto.strip():
+    if idioma == "Español" or not str(texto).strip():
         return texto
     try:
         traductor = GoogleTranslator(source='es', target='en')
-        return traductor.translate(texto)
+        return traductor.translate(str(texto))
     except Exception as e:
         return f"[Error de traducción] {texto}"
 
@@ -76,15 +76,17 @@ def traducir_texto(texto, idioma):
 LBL = {
     "Español": {
         "titulo": "INFORME TÉCNICO DE SERVICIO", "orden": "Orden", "fac": "Factura", "cliente": "Cliente",
-        "fec_fac": "Fec. Factura", "prod": "Producto", "serie": "Serie", "realizador": "Realizado por",
-        "fec_rep": "Fecha Reporte", "revisador": "Revisado por", "evidencia": "EVIDENCIA DE IMÁGENES",
-        "figura": "Figura"
+        "fec_fac": "Fecha factura", "prod": "Articulo", "serie": "Serie", "realizador": "Realizado por",
+        "fec_rep": "Fecha reclamo", "revisador": "Revisado por", "evidencia": "EVIDENCIA DE IMÁGENES",
+        "figura": "Figura", "marca": "Marca", "modelo": "Modelo", "repuesto": "Repuesto",
+        "codigo": "Código", "cantidad": "Cantidad", "reporte": "Reporte"
     },
     "Inglés": {
         "titulo": "TECHNICAL SERVICE REPORT", "orden": "Order", "fac": "Invoice", "cliente": "Customer",
-        "fec_fac": "Invoice Date", "prod": "Product", "serie": "Serial/Code", "realizador": "Prepared by",
-        "fec_rep": "Report Date", "revisador": "Reviewed by", "evidencia": "IMAGE EVIDENCE",
-        "figura": "Figure"
+        "fec_fac": "Invoice Date", "prod": "Article", "serie": "Serial/Code", "realizador": "Prepared by",
+        "fec_rep": "Claim Date", "revisador": "Reviewed by", "evidencia": "IMAGE EVIDENCE",
+        "figura": "Figure", "marca": "Brand", "modelo": "Model", "repuesto": "Spare Part",
+        "codigo": "Code", "cantidad": "Quantity", "reporte": "Report"
     }
 }
 
@@ -133,14 +135,31 @@ def generar_pdf(datos, secciones_activas, lista_imgs, idioma):
     story.append(Spacer(1, 15))
     
     fac_txt = "STOCK" if str(datos['factura']).strip() in ["0", "nan", ""] else datos['factura']
-    info = [
-        [Paragraph(f"<b>{l['orden']}:</b> {datos['orden']}", est_txt), Paragraph(f"<b>{l['fac']}:</b> {fac_txt}", est_txt)],
-        [Paragraph(f"<b>{l['cliente']}:</b> {datos['cliente']}", est_txt), Paragraph(f"<b>{l['fec_fac']}:</b> {datos['fecha_factura']}", est_txt)],
-        [Paragraph(f"<b>{l['prod']}:</b> {datos['producto']}", est_txt), Paragraph(f"<b>{l['serie']}:</b> {datos['serie']}", est_txt)],
-        [Paragraph(f"<b>{l['realizador']}:</b> {datos['realizador']}", est_txt), Paragraph(f"<b>{l['fec_rep']}:</b> {datos['fecha_reporte']}", est_txt)]
-    ]
-    t = Table(info, colWidths=[3.7*inch, 3.7*inch])
-    t.setStyle(TableStyle([('GRID', (0,0), (-1,-1), 0.5, colors.lightgrey), ('VALIGN', (0,0), (-1,-1), 'MIDDLE')]))
+    
+    # --- LOGICA CONDICIONAL DE TABLA DE CABECERA ---
+    es_reclamo = "RECLAMO AL PROVEEDOR" in str(datos['tipo_reporte_original']).upper()
+    
+    if es_reclamo:
+        rep_txt = f"<font color='red'>{datos['tipo_reporte']}</font>"
+        info = [
+            [Paragraph(f"<b>{l['orden']}:</b>", est_txt), Paragraph(f"{datos['orden']}", est_txt), Paragraph(f"<b>{l['fec_rep']}:</b>", est_txt), Paragraph(f"{datos['fecha_reporte']}", est_txt)],
+            [Paragraph(f"<b>{l['cliente']}:</b>", est_txt), Paragraph(f"{datos['cliente']}", est_txt), Paragraph(f"<b>{l['prod']}:</b>", est_txt), Paragraph(f"{datos['producto']}", est_txt)],
+            [Paragraph(f"<b>{l['fac']}:</b>", est_txt), Paragraph(f"{fac_txt}", est_txt), Paragraph(f"<b>{l['marca']}:</b>", est_txt), Paragraph(f"{datos['marca']}", est_txt)],
+            [Paragraph(f"<b>{l['fec_fac']}:</b>", est_txt), Paragraph(f"{datos['fecha_factura']}", est_txt), Paragraph(f"<b>{l['modelo']}:</b>", est_txt), Paragraph(f"{datos['modelo']}", est_txt)],
+            [Paragraph(f"<b>{l['repuesto']}:</b>", est_txt), Paragraph(f"{datos['repuesto']}", est_txt), Paragraph(f"<b>{l['codigo']}:</b>", est_txt), Paragraph(f"{datos['codigo']}", est_txt)],
+            [Paragraph(f"<b>{l['cantidad']}:</b>", est_txt), Paragraph(f"{datos['cantidad']}", est_txt), Paragraph(f"<b>{l['reporte']}:</b>", est_txt), Paragraph(rep_txt, est_txt)]
+        ]
+        t = Table(info, colWidths=[1.1*inch, 2.6*inch, 1.1*inch, 2.6*inch])
+    else:
+        info = [
+            [Paragraph(f"<b>{l['orden']}:</b> {datos['orden']}", est_txt), Paragraph(f"<b>{l['fac']}:</b> {fac_txt}", est_txt)],
+            [Paragraph(f"<b>{l['cliente']}:</b> {datos['cliente']}", est_txt), Paragraph(f"<b>{l['fec_fac']}:</b> {datos['fecha_factura']}", est_txt)],
+            [Paragraph(f"<b>{l['prod']}:</b> {datos['producto']}", est_txt), Paragraph(f"<b>{l['serie']}:</b> {datos['serie']}", est_txt)],
+            [Paragraph(f"<b>{l['realizador']}:</b> {datos['realizador']}", est_txt), Paragraph(f"<b>{l['fec_rep']}:</b> {datos['fecha_reporte']}", est_txt)]
+        ]
+        t = Table(info, colWidths=[3.7*inch, 3.7*inch])
+        
+    t.setStyle(TableStyle([('GRID', (0,0), (-1,-1), 0.5, colors.black), ('VALIGN', (0,0), (-1,-1), 'MIDDLE')]))
     story.append(t)
     story.append(Spacer(1, 10))
 
@@ -194,47 +213,82 @@ def generar_word(datos, secciones_activas, lista_imgs, idioma):
     l = LBL[idioma]
     doc = Document()
     
-    # --- INCORPORACIÓN DE LOGOS EN WORD ---
+    # Incorporación de Logos
     logo_izq_path, logo_der_path = "logo.png", "logo_derecho.png"
-    
     if os.path.exists(logo_izq_path) or os.path.exists(logo_der_path):
-        # Crear tabla invisible de 1 fila y 2 columnas
         tabla_logos = doc.add_table(rows=1, cols=2)
         celda_izq = tabla_logos.cell(0, 0)
         celda_der = tabla_logos.cell(0, 1)
-        
         if os.path.exists(logo_izq_path):
             p_izq = celda_izq.paragraphs[0]
-            run_izq = p_izq.add_run()
-            run_izq.add_picture(logo_izq_path, width=Inches(1.4))
+            p_izq.add_run().add_picture(logo_izq_path, width=Inches(1.4))
             p_izq.alignment = WD_ALIGN_PARAGRAPH.LEFT
-            
         if os.path.exists(logo_der_path):
             p_der = celda_der.paragraphs[0]
-            run_der = p_der.add_run()
-            run_der.add_picture(logo_der_path, width=Inches(1.4))
+            p_der.add_run().add_picture(logo_der_path, width=Inches(1.4))
             p_der.alignment = WD_ALIGN_PARAGRAPH.RIGHT
-            
-        doc.add_paragraph() # Espaciador debajo de los logos
-    # --- FIN DE LOGOS ---
+        doc.add_paragraph() 
 
     h1 = doc.add_heading(l['titulo'], level=1)
     h1.alignment = WD_ALIGN_PARAGRAPH.CENTER
     doc.add_paragraph()
 
     fac_txt = "STOCK" if str(datos['factura']).strip() in ["0", "nan", ""] else datos['factura']
-    table = doc.add_table(rows=4, cols=2)
-    table.style = 'Table Grid'
     
-    celdas = table.rows
-    celdas[0].cells[0].text = f"{l['orden']}: {datos['orden']}"
-    celdas[0].cells[1].text = f"{l['fac']}: {fac_txt}"
-    celdas[1].cells[0].text = f"{l['cliente']}: {datos['cliente']}"
-    celdas[1].cells[1].text = f"{l['fec_fac']}: {datos['fecha_factura']}"
-    celdas[2].cells[0].text = f"{l['prod']}: {datos['producto']}"
-    celdas[2].cells[1].text = f"{l['serie']}: {datos['serie']}"
-    celdas[3].cells[0].text = f"{l['realizador']}: {datos['realizador']}"
-    celdas[3].cells[1].text = f"{l['fec_rep']}: {datos['fecha_reporte']}"
+    # --- LOGICA CONDICIONAL DE TABLA EN WORD ---
+    es_reclamo = "RECLAMO AL PROVEEDOR" in str(datos['tipo_reporte_original']).upper()
+
+    if es_reclamo:
+        table = doc.add_table(rows=6, cols=4)
+        table.style = 'Table Grid'
+        celdas = table.rows
+        
+        # Fila 1
+        celdas[0].cells[0].paragraphs[0].add_run(f"{l['orden']}:").bold = True
+        celdas[0].cells[1].text = str(datos['orden'])
+        celdas[0].cells[2].paragraphs[0].add_run(f"{l['fec_rep']}:").bold = True
+        celdas[0].cells[3].text = str(datos['fecha_reporte'])
+        # Fila 2
+        celdas[1].cells[0].paragraphs[0].add_run(f"{l['cliente']}:").bold = True
+        celdas[1].cells[1].text = str(datos['cliente'])
+        celdas[1].cells[2].paragraphs[0].add_run(f"{l['prod']}:").bold = True
+        celdas[1].cells[3].text = str(datos['producto'])
+        # Fila 3
+        celdas[2].cells[0].paragraphs[0].add_run(f"{l['fac']}:").bold = True
+        celdas[2].cells[1].text = str(fac_txt)
+        celdas[2].cells[2].paragraphs[0].add_run(f"{l['marca']}:").bold = True
+        celdas[2].cells[3].text = str(datos['marca'])
+        # Fila 4
+        celdas[3].cells[0].paragraphs[0].add_run(f"{l['fec_fac']}:").bold = True
+        celdas[3].cells[1].text = str(datos['fecha_factura'])
+        celdas[3].cells[2].paragraphs[0].add_run(f"{l['modelo']}:").bold = True
+        celdas[3].cells[3].text = str(datos['modelo'])
+        # Fila 5
+        celdas[4].cells[0].paragraphs[0].add_run(f"{l['repuesto']}:").bold = True
+        celdas[4].cells[1].text = str(datos['repuesto'])
+        celdas[4].cells[2].paragraphs[0].add_run(f"{l['codigo']}:").bold = True
+        celdas[4].cells[3].text = str(datos['codigo'])
+        # Fila 6
+        celdas[5].cells[0].paragraphs[0].add_run(f"{l['cantidad']}:").bold = True
+        celdas[5].cells[1].text = str(datos['cantidad'])
+        celdas[5].cells[2].paragraphs[0].add_run(f"{l['reporte']}:").bold = True
+        
+        # Texto rojo para el reporte
+        run_rep = celdas[5].cells[3].paragraphs[0].add_run(str(datos['tipo_reporte']))
+        run_rep.font.color.rgb = RGBColor(255, 0, 0) 
+        
+    else:
+        table = doc.add_table(rows=4, cols=2)
+        table.style = 'Table Grid'
+        celdas = table.rows
+        celdas[0].cells[0].text = f"{l['orden']}: {datos['orden']}"
+        celdas[0].cells[1].text = f"{l['fac']}: {fac_txt}"
+        celdas[1].cells[0].text = f"{l['cliente']}: {datos['cliente']}"
+        celdas[1].cells[1].text = f"{l['fec_fac']}: {datos['fecha_factura']}"
+        celdas[2].cells[0].text = f"{l['prod']}: {datos['producto']}"
+        celdas[2].cells[1].text = f"{l['serie']}: {datos['serie']}"
+        celdas[3].cells[0].text = f"{l['realizador']}: {datos['realizador']}"
+        celdas[3].cells[1].text = f"{l['fec_rep']}: {datos['fecha_reporte']}"
     
     doc.add_paragraph()
 
@@ -272,8 +326,17 @@ def generar_txt_contenido(datos, secciones_activas, idioma):
     txt += f"{l['fac']}: {fac_txt}\n"
     txt += f"{l['fec_fac']}: {datos['fecha_factura']}\n"
     txt += f"{l['orden']}: {datos['orden']}\n"
-    txt += f"{l['serie']}: {datos['serie']}\n"
     txt += f"{l['prod']}: {datos['producto']}\n"
+    
+    if "RECLAMO AL PROVEEDOR" in str(datos['tipo_reporte_original']).upper():
+        txt += f"{l['marca']}: {datos['marca']}\n"
+        txt += f"{l['modelo']}: {datos['modelo']}\n"
+        txt += f"{l['repuesto']}: {datos['repuesto']}\n"
+        txt += f"{l['codigo']}: {datos['codigo']}\n"
+        txt += f"{l['cantidad']}: {datos['cantidad']}\n"
+    else:
+        txt += f"{l['serie']}: {datos['serie']}\n"
+
     txt += f"{l['revisador']}: {datos['tecnico']}\n\n"
     txt += f"TIPO DE REPORTE: {datos['tipo_reporte']}\n\n"
     
@@ -303,17 +366,31 @@ with col1:
     tipo_rep = st.selectbox("Tipo de Reporte", options=OPCIONES_REPORTE)
     f_realizador = st.selectbox("Realizado por", options=LISTA_REALIZADORES)
     f_cliente = st.text_input("Cliente", value=c_v)
-    f_prod = st.text_input("Producto", value=p_v)
+    f_prod = st.text_input("Artículo / Producto", value=p_v)
 with col2:
     f_tecnico = st.selectbox("Revisado por (Técnico)", options=LISTA_TECNICOS)
     f_fac = st.text_input("Factura", value=f_v)
     f_fec_fac = st.date_input("Fecha Factura", value=ff_v)
-    f_fec_rep = st.date_input("Fecha del Reporte", value=date.today())
-    f_serie = st.text_input("Serie/Artículo", value=s_v)
+    f_fec_rep = st.date_input("Fecha del Reporte (Reclamo)", value=date.today())
+    f_serie = st.text_input("Serie", value=s_v)
 
+# --- CAMPOS DINAMICOS PARA RECLAMO AL PROVEEDOR ---
+f_marca, f_modelo, f_repuesto, f_codigo, f_cantidad = "", "", "", "", 1
+
+if tipo_rep == "RECLAMO AL PROVEEDOR":
+    st.markdown("### 📝 Datos de Reclamo al Proveedor")
+    col_r1, col_r2 = st.columns(2)
+    with col_r1:
+        f_marca = st.text_input("Marca")
+        f_modelo = st.text_input("Modelo")
+        f_repuesto = st.text_input("Repuesto (Ej. CONGELADOR HORIZONTAL)")
+    with col_r2:
+        f_codigo = st.text_input("Código")
+        f_cantidad = st.number_input("Cantidad", min_value=1, value=1)
 st.markdown("---")
-st.markdown("### 📝 Contenido del Reporte (Selecciona qué incluir)")
 
+
+st.markdown("### 📝 Contenido del Reporte (Selecciona qué incluir)")
 def_rf = f"Ingresa a servicio técnico {f_prod}. Se observa el uso continuo del artículo."
 def_re = "Se procede a revisar el sistema de alimentación de energía y sus líneas de conexión.\nSe procede a revisar el sistema electrónico del equipo.\nSe procede a revisar el sistema mecanico de equipo"
 def_obs = "Luego de la revisión del artículo se observa lo siguiente: "
@@ -389,7 +466,8 @@ if st.button("💾 GENERAR ARCHIVOS EN ESPAÑOL E INGLÉS", use_container_width=
         datos_es = {
             "orden": orden_id, "cliente": f_cliente, "factura": f_fac, "fecha_factura": f_fec_fac,
             "producto": f_prod, "serie": f_serie, "tecnico": f_tecnico, "realizador": f_realizador,
-            "fecha_reporte": f_fec_rep, "tipo_reporte": tipo_rep
+            "fecha_reporte": f_fec_rep, "tipo_reporte": tipo_rep, "tipo_reporte_original": tipo_rep,
+            "marca": f_marca, "modelo": f_modelo, "repuesto": f_repuesto, "codigo": f_codigo, "cantidad": f_cantidad
         }
 
         # --- DATOS EN INGLÉS ---
@@ -405,7 +483,9 @@ if st.button("💾 GENERAR ARCHIVOS EN ESPAÑOL E INGLÉS", use_container_width=
         datos_en = {
             "orden": orden_id, "cliente": f_cliente, "factura": f_fac, "fecha_factura": f_fec_fac,
             "producto": traducir_texto(f_prod, "Inglés"), "serie": f_serie, "tecnico": f_tecnico, "realizador": f_realizador,
-            "fecha_reporte": f_fec_rep, "tipo_reporte": traducir_texto(tipo_rep, "Inglés")
+            "fecha_reporte": f_fec_rep, "tipo_reporte": traducir_texto(tipo_rep, "Inglés"), "tipo_reporte_original": tipo_rep,
+            "marca": traducir_texto(f_marca, "Inglés"), "modelo": traducir_texto(f_modelo, "Inglés"), 
+            "repuesto": traducir_texto(f_repuesto, "Inglés"), "codigo": f_codigo, "cantidad": f_cantidad
         }
 
         st.session_state.pdf_es = generar_pdf(datos_es, secciones_es, imgs_procesadas_es, "Español")
