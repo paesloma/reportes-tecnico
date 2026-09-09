@@ -415,15 +415,15 @@ texto_concl_default = TEXTOS_CONCLUSIONES.get(tipo_rep, "")
 
 c_chk1, c_txt1 = st.columns([1, 10])
 with c_chk1: inc_rf = st.checkbox("Incluir", value=True, key="c1")
-with c_txt1: f_rev_fisica = st.text_area("1. Revisión Física", value=def_rf)
+with c_txt1: f_rev_fisica = st.text_area("Revisión Física", value=def_rf)
 
 c_chk2, c_txt2 = st.columns([1, 10])
 with c_chk2: inc_ing = st.checkbox("Incluir", value=True, key="c2")
-with c_txt2: f_ingreso_tec = st.text_area("2. Ingresa a servicio técnico")
+with c_txt2: f_ingreso_tec = st.text_area("Ingresa a servicio técnico")
 
 c_chk3, c_txt3 = st.columns([1, 10])
 with c_chk3: inc_re = st.checkbox("Incluir", value=True, key="c3")
-with c_txt3: f_rev_electro = st.text_area("3. Revisión electro-electrónica-mecanica", value=def_re)
+with c_txt3: f_rev_electro = st.text_area("Revisión electro-electrónica-mecanica", value=def_re)
 
 c_chk4, c_txt4 = st.columns([1, 10])
 with c_chk4: inc_obs = st.checkbox("Incluir", value=True, key="c4")
@@ -431,7 +431,7 @@ with c_txt4: f_obs = st.text_area("4. Observaciones", value=def_obs)
 
 c_chk5, c_txt5 = st.columns([1, 10])
 with c_chk5: inc_con = st.checkbox("Incluir", value=True, key="c5")
-with c_txt5: f_concl = st.text_area("5. Conclusiones", value=texto_concl_default, height=150)
+with c_txt5: f_concl = st.text_area("Conclusiones", value=texto_concl_default, height=150)
 
 st.markdown("---")
 st.markdown("### 📸 Evidencia Fotográfica")
@@ -472,7 +472,7 @@ if st.button("💾 GENERAR ARCHIVOS EN ESPAÑOL E INGLÉS", use_container_width=
 
         # --- DATOS EN ESPAÑOL ---
         secciones_es = []
-        titulos_es = ["1. Revisión Física", "2. Ingresa a servicio técnico", "3. Revisión electro-electrónica-mecanica", "4. Observaciones", "5. Conclusiones"]
+        titulos_es = ["Revisión Física", "Ingresa a servicio técnico", "Revisión electro-electrónica-mecanica", "4. Observaciones", "Conclusiones"]
         
         if inc_rf: secciones_es.append((titulos_es[0], f_rev_fisica))
         if inc_ing: secciones_es.append((titulos_es[1], f_ingreso_tec))
