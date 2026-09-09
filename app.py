@@ -261,7 +261,7 @@ def generar_txt_contenido(datos, secciones_activas, idioma):
     return txt
 
 # --- 5. INTERFAZ ---
-st.title("🚀 Gestión de Reportes Técnicos (Bilingüe)")
+st.title("🚀 Gestión de Reportes Técnicos")
 
 orden_id = st.text_input("Ingrese número de Orden")
 c_v, s_v, p_v, f_v, ff_v = "", "", "", "", date.today()
