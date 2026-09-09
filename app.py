@@ -365,7 +365,7 @@ def generar_txt_contenido(datos, secciones_activas, idioma):
     return txt
 
 # --- 5. INTERFAZ ---
-st.title("🚀 Gestión de Reportes Técnicos (Bilingüe)")
+st.title("🚀 Reportes Técnicos")
 
 orden_id = st.text_input("Ingrese número de Orden")
 c_v, s_v, p_v, f_v, ff_v = "", "", "", "", date.today()
@@ -427,7 +427,7 @@ with c_txt3: f_rev_electro = st.text_area("Revisión electro-electrónica-mecani
 
 c_chk4, c_txt4 = st.columns([1, 10])
 with c_chk4: inc_obs = st.checkbox("Incluir", value=True, key="c4")
-with c_txt4: f_obs = st.text_area("4. Observaciones", value=def_obs)
+with c_txt4: f_obs = st.text_area("Observaciones", value=def_obs)
 
 c_chk5, c_txt5 = st.columns([1, 10])
 with c_chk5: inc_con = st.checkbox("Incluir", value=True, key="c5")
@@ -472,7 +472,7 @@ if st.button("💾 GENERAR ARCHIVOS EN ESPAÑOL E INGLÉS", use_container_width=
 
         # --- DATOS EN ESPAÑOL ---
         secciones_es = []
-        titulos_es = ["Revisión Física", "Ingresa a servicio técnico", "Revisión electro-electrónica-mecanica", "4. Observaciones", "Conclusiones"]
+        titulos_es = ["Revisión Física", "Ingresa a servicio técnico", "Revisión electro-electrónica-mecanica", "Observaciones", "Conclusiones"]
         
         if inc_rf: secciones_es.append((titulos_es[0], f_rev_fisica))
         if inc_ing: secciones_es.append((titulos_es[1], f_ingreso_tec))
