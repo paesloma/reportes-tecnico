@@ -2,5 +2,5 @@ streamlit
 pandas
 reportlab
 Pillow
-groq
 python-docx
+deep-translator
