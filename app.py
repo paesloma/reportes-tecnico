@@ -356,7 +356,7 @@ if st.button("💾 GENERAR ARCHIVOS EN ESPAÑOL E INGLÉS", use_container_width=
 
         # --- DATOS EN ESPAÑOL ---
         secciones_es = []
-        titulos_es = ["1. Revisión Física", "2. Ingresa a servicio técnico", "3. Revisión electro-electrónica-mecanica", "4. Observaciones", "5. Conclusiones"]
+        titulos_es = ["Revisión Física", "Ingresa a servicio técnico", "Revisión electro-electrónica-mecanica", "Observaciones", "Conclusiones"]
         
         if inc_rf: secciones_es.append((titulos_es[0], f_rev_fisica))
         if inc_ing: secciones_es.append((titulos_es[1], f_ingreso_tec))
