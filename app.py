@@ -17,14 +17,15 @@ from docx import Document
 from docx.shared import Inches, Pt
 from docx.enum.text import WD_ALIGN_PARAGRAPH
 
-# Importación de Groq (Traducción)
-from groq import Groq
+# Importación de traductor gratuito (Sin API Key)
+from deep_translator import GoogleTranslator
 
 # --- 1. CONFIGURACIÓN Y PERSISTENCIA ---
 st.set_page_config(page_title="Generador de Reportes", page_icon="🔧", layout="wide")
 
-# Inicialización de estados
-for key in ['pdf_data', 'txt_data', 'word_data']:
+# Inicialización de estados para los 6 documentos
+claves_estado = ['pdf_es', 'word_es', 'txt_es', 'pdf_en', 'word_en', 'txt_en']
+for key in claves_estado:
     if key not in st.session_state:
         st.session_state[key] = None
 
@@ -62,23 +63,14 @@ TEXTOS_CONCLUSIONES = {
 }
 
 # --- 3. FUNCIONES DE TRADUCCIÓN ---
-def traducir_texto(texto, idioma, api_key):
+def traducir_texto(texto, idioma):
     if idioma == "Español" or not texto.strip():
         return texto
-    if not api_key:
-        return texto + " (Sin API Key para traducir)"
-    
     try:
-        client = Groq(api_key=api_key)
-        prompt = f"Translate the following technical report text into professional technical English. Only provide the translation, no conversational text or explanations:\n\n{texto}"
-        chat_completion = client.chat.completions.create(
-            messages=[{"role": "user", "content": prompt}],
-            model="llama3-8b-8192",
-            temperature=0.2,
-        )
-        return chat_completion.choices[0].message.content
+        traductor = GoogleTranslator(source='es', target='en')
+        return traductor.translate(texto)
     except Exception as e:
-        return f"[Error de traducción: {e}] {texto}"
+        return f"[Error de traducción] {texto}"
 
 # Etiquetas estáticas bilingües
 LBL = {
@@ -145,7 +137,7 @@ def generar_pdf(datos, secciones_activas, lista_imgs, idioma):
         [Paragraph(f"<b>{l['orden']}:</b> {datos['orden']}", est_txt), Paragraph(f"<b>{l['fac']}:</b> {fac_txt}", est_txt)],
         [Paragraph(f"<b>{l['cliente']}:</b> {datos['cliente']}", est_txt), Paragraph(f"<b>{l['fec_fac']}:</b> {datos['fecha_factura']}", est_txt)],
         [Paragraph(f"<b>{l['prod']}:</b> {datos['producto']}", est_txt), Paragraph(f"<b>{l['serie']}:</b> {datos['serie']}", est_txt)],
-        [Paragraph(f"<b>{l['realizador']}:</b> {datos['realizador']}", est_txt), Paragraph(f"<b>{l['fec_rep']}:</b> {datos['fecha_hoy']}", est_txt)]
+        [Paragraph(f"<b>{l['realizador']}:</b> {datos['realizador']}", est_txt), Paragraph(f"<b>{l['fec_rep']}:</b> {datos['fecha_reporte']}", est_txt)]
     ]
     t = Table(info, colWidths=[3.7*inch, 3.7*inch])
     t.setStyle(TableStyle([('GRID', (0,0), (-1,-1), 0.5, colors.lightgrey), ('VALIGN', (0,0), (-1,-1), 'MIDDLE')]))
@@ -166,7 +158,9 @@ def generar_pdf(datos, secciones_activas, lista_imgs, idioma):
         
         for idx, i in enumerate(lista_imgs):
             try:
-                img_obj = RLImage(i['imagen'], width=3.4*inch, height=2.2*inch)
+                # Usamos BytesIO para que pueda leer de los bytes crudos en memoria multiples veces
+                img_stream = BytesIO(i['imagen_raw'])
+                img_obj = RLImage(img_stream, width=3.4*inch, height=2.2*inch)
                 celda = [img_obj, Spacer(1, 4), Paragraph(f"{l['figura']} {idx+1}. {i['descripcion']}", est_fig)]
                 fila_actual.append(celda)
                 if len(fila_actual) == 2:
@@ -201,12 +195,10 @@ def generar_word(datos, secciones_activas, lista_imgs, idioma):
     l = LBL[idioma]
     doc = Document()
     
-    # Estilo de Título
     h1 = doc.add_heading(l['titulo'], level=1)
     h1.alignment = WD_ALIGN_PARAGRAPH.CENTER
     doc.add_paragraph()
 
-    # Tabla de Datos
     fac_txt = "STOCK" if str(datos['factura']).strip() in ["0", "nan", ""] else datos['factura']
     table = doc.add_table(rows=4, cols=2)
     table.style = 'Table Grid'
@@ -219,29 +211,25 @@ def generar_word(datos, secciones_activas, lista_imgs, idioma):
     celdas[2].cells[0].text = f"{l['prod']}: {datos['producto']}"
     celdas[2].cells[1].text = f"{l['serie']}: {datos['serie']}"
     celdas[3].cells[0].text = f"{l['realizador']}: {datos['realizador']}"
-    celdas[3].cells[1].text = f"{l['fec_rep']}: {datos['fecha_hoy']}"
+    celdas[3].cells[1].text = f"{l['fec_rep']}: {datos['fecha_reporte']}"
     
     doc.add_paragraph()
 
-    # Secciones Dinámicas
     for tit, cont in secciones_activas:
-        h2 = doc.add_heading(tit, level=2)
+        doc.add_heading(tit, level=2)
         doc.add_paragraph(cont)
 
-    # Imágenes
     if lista_imgs:
         doc.add_heading(l['evidencia'], level=2)
         for idx, i in enumerate(lista_imgs):
             try:
-                # Guardamos temporalmente el buffer para docx
-                img_stream = BytesIO(i['imagen'].getvalue())
+                img_stream = BytesIO(i['imagen_raw'])
                 doc.add_picture(img_stream, width=Inches(4.5))
                 p = doc.add_paragraph(f"{l['figura']} {idx+1}. {i['descripcion']}")
                 p.alignment = WD_ALIGN_PARAGRAPH.CENTER
             except Exception as e:
                 doc.add_paragraph(f"Error cargando imagen {idx+1}: {e}")
 
-    # Firmas
     doc.add_paragraph("\n\n\n")
     p_firmas = doc.add_paragraph()
     p_firmas.add_run(f"{l['realizador']}:\t\t\t\t\t{l['revisador']}:\n").bold = True
@@ -273,11 +261,7 @@ def generar_txt_contenido(datos, secciones_activas, idioma):
     return txt
 
 # --- 5. INTERFAZ ---
-st.sidebar.markdown("### ⚙️ Configuración Global")
-idioma_sel = st.sidebar.radio("Idioma del Reporte", ["Español", "Inglés"])
-api_key_groq = st.sidebar.text_input("🔑 API Key Groq (Requerido para Inglés)", type="password")
-
-st.title("🚀 Gestión de Reportes Técnicos")
+st.title("🚀 Gestión de Reportes Técnicos (Bilingüe)")
 
 orden_id = st.text_input("Ingrese número de Orden")
 c_v, s_v, p_v, f_v, ff_v = "", "", "", "", date.today()
@@ -301,12 +285,12 @@ with col2:
     f_tecnico = st.selectbox("Revisado por (Técnico)", options=LISTA_TECNICOS)
     f_fac = st.text_input("Factura", value=f_v)
     f_fec_fac = st.date_input("Fecha Factura", value=ff_v)
+    f_fec_rep = st.date_input("Fecha del Reporte", value=date.today()) # <-- NUEVO CAMPO DE FECHA
     f_serie = st.text_input("Serie/Artículo", value=s_v)
 
 st.markdown("---")
 st.markdown("### 📝 Contenido del Reporte (Selecciona qué incluir)")
 
-# Textos default
 def_rf = f"Ingresa a servicio técnico {f_prod}. Se observa el uso continuo del artículo."
 def_re = "Se procede a revisar el sistema de alimentación de energía y sus líneas de conexión.\nSe procede a revisar el sistema electrónico del equipo.\nSe procede a revisar el sistema mecanico de equipo"
 def_obs = "Luego de la revisión del artículo se observa lo siguiente: "
@@ -348,68 +332,88 @@ if uploaded_files:
 
 st.markdown("---")
 
-if st.button("💾 GENERAR ARCHIVOS", use_container_width=True):
-    if idioma_sel == "Inglés" and not api_key_groq:
-        st.warning("⚠️ No ingresaste la API Key de Groq. Los textos manuales no se traducirán correctamente.")
+if st.button("💾 GENERAR ARCHIVOS EN ESPAÑOL E INGLÉS", use_container_width=True):
+    with st.spinner("Generando los 6 documentos simultáneamente..."):
         
-    with st.spinner("Procesando imágenes y generando documentos..."):
-        # Procesar imágenes
-        imgs_procesadas = []
+        # Procesar imágenes una vez, y traducir descripciones
+        imgs_procesadas_es = []
+        imgs_procesadas_en = []
         for item in lista_imgs_temp:
             try:
                 p_img = PilImage.open(item['file'])
                 if p_img.mode != 'RGB': p_img = p_img.convert('RGB')
                 img_byte = BytesIO()
                 p_img.save(img_byte, format='JPEG', quality=95)
-                img_byte.seek(0)
+                img_raw = img_byte.getvalue() # Guardar en crudo para reutilizar
                 
-                # Traducir descripción de imagen si aplica
-                desc_traducida = traducir_texto(item['desc'], idioma_sel, api_key_groq)
-                imgs_procesadas.append({"imagen": img_byte, "descripcion": desc_traducida})
+                desc_es = item['desc']
+                desc_en = traducir_texto(desc_es, "Inglés")
+                
+                imgs_procesadas_es.append({"imagen_raw": img_raw, "descripcion": desc_es})
+                imgs_procesadas_en.append({"imagen_raw": img_raw, "descripcion": desc_en})
             except Exception as e:
                 st.error(f"Error procesando imagen: {e}")
 
-        # Preparar secciones dinámicas
-        secciones_activas = []
+        # --- DATOS EN ESPAÑOL ---
+        secciones_es = []
+        titulos_es = ["1. Revisión Física", "2. Ingresa a servicio técnico", "3. Revisión electro-electrónica-mecanica", "4. Observaciones", "5. Conclusiones"]
         
-        # Diccionario de títulos según idioma
-        titulos = {
-            "Español": ["1. Revisión Física", "2. Ingresa a servicio técnico", "3. Revisión electro-electrónica-mecanica", "4. Observaciones", "5. Conclusiones"],
-            "Inglés": ["1. Physical Inspection", "2. Entry to Technical Service", "3. Electro-Mechanical Review", "4. Observations", "5. Conclusions"]
-        }
-        t = titulos[idioma_sel]
+        if inc_rf: secciones_es.append((titulos_es[0], f_rev_fisica))
+        if inc_ing: secciones_es.append((titulos_es[1], f_ingreso_tec))
+        if inc_re: secciones_es.append((titulos_es[2], f_rev_electro))
+        if inc_obs: secciones_es.append((titulos_es[3], f_obs))
+        if inc_con: secciones_es.append((titulos_es[4], f_concl))
 
-        if inc_rf: secciones_activas.append((t[0], traducir_texto(f_rev_fisica, idioma_sel, api_key_groq)))
-        if inc_ing: secciones_activas.append((t[1], traducir_texto(f_ingreso_tec, idioma_sel, api_key_groq)))
-        if inc_re: secciones_activas.append((t[2], traducir_texto(f_rev_electro, idioma_sel, api_key_groq)))
-        if inc_obs: secciones_activas.append((t[3], traducir_texto(f_obs, idioma_sel, api_key_groq)))
-        if inc_con: secciones_activas.append((t[4], traducir_texto(f_concl, idioma_sel, api_key_groq)))
-
-        # Traducción de datos sueltos
-        prod_traducido = traducir_texto(f_prod, idioma_sel, api_key_groq)
-        tipo_rep_traducido = traducir_texto(tipo_rep, idioma_sel, api_key_groq)
-
-        datos = {
+        datos_es = {
             "orden": orden_id, "cliente": f_cliente, "factura": f_fac, "fecha_factura": f_fec_fac,
-            "producto": prod_traducido, "serie": f_serie, "tecnico": f_tecnico, "realizador": f_realizador,
-            "fecha_hoy": date.today(), "tipo_reporte": tipo_rep_traducido
+            "producto": f_prod, "serie": f_serie, "tecnico": f_tecnico, "realizador": f_realizador,
+            "fecha_reporte": f_fec_rep, "tipo_reporte": tipo_rep
         }
 
-        # Generar archivos
-        st.session_state.pdf_data = generar_pdf(datos, secciones_activas, imgs_procesadas, idioma_sel)
-        st.session_state.word_data = generar_word(datos, secciones_activas, imgs_procesadas, idioma_sel)
-        st.session_state.txt_data = generar_txt_contenido(datos, secciones_activas, idioma_sel)
+        # --- DATOS EN INGLÉS ---
+        secciones_en = []
+        titulos_en = ["1. Physical Inspection", "2. Entry to Technical Service", "3. Electro-Mechanical Review", "4. Observations", "5. Conclusions"]
         
-        st.success("✅ Archivos generados correctamente")
+        if inc_rf: secciones_en.append((titulos_en[0], traducir_texto(f_rev_fisica, "Inglés")))
+        if inc_ing: secciones_en.append((titulos_en[1], traducir_texto(f_ingreso_tec, "Inglés")))
+        if inc_re: secciones_en.append((titulos_en[2], traducir_texto(f_rev_electro, "Inglés")))
+        if inc_obs: secciones_en.append((titulos_en[3], traducir_texto(f_obs, "Inglés")))
+        if inc_con: secciones_en.append((titulos_en[4], traducir_texto(f_concl, "Inglés")))
 
-if st.session_state.pdf_data:
-    st.markdown("### 📥 Descargas")
+        datos_en = {
+            "orden": orden_id, "cliente": f_cliente, "factura": f_fac, "fecha_factura": f_fec_fac,
+            "producto": traducir_texto(f_prod, "Inglés"), "serie": f_serie, "tecnico": f_tecnico, "realizador": f_realizador,
+            "fecha_reporte": f_fec_rep, "tipo_reporte": traducir_texto(tipo_rep, "Inglés")
+        }
+
+        # Generar archivos ES
+        st.session_state.pdf_es = generar_pdf(datos_es, secciones_es, imgs_procesadas_es, "Español")
+        st.session_state.word_es = generar_word(datos_es, secciones_es, imgs_procesadas_es, "Español")
+        st.session_state.txt_es = generar_txt_contenido(datos_es, secciones_es, "Español")
+        
+        # Generar archivos EN
+        st.session_state.pdf_en = generar_pdf(datos_en, secciones_en, imgs_procesadas_en, "Inglés")
+        st.session_state.word_en = generar_word(datos_en, secciones_en, imgs_procesadas_en, "Inglés")
+        st.session_state.txt_en = generar_txt_contenido(datos_en, secciones_en, "Inglés")
+        
+        st.success("✅ ¡Los 6 archivos fueron generados exitosamente!")
+
+# Mostrar botones de descarga si los datos existen
+if st.session_state.pdf_es:
+    st.markdown("### 🇪🇸 Descargas en Español")
     c1, c2, c3 = st.columns(3)
-    sufijo_id = "EN" if idioma_sel == "Inglés" else "ES"
-    
     with c1:
-        st.download_button("📄 Descargar PDF", data=st.session_state.pdf_data, file_name=f"{f_prod}_{f_cliente}_{orden_id}_{sufijo_id}.pdf", mime="application/pdf", use_container_width=True)
+        st.download_button("📄 Descargar PDF (ES)", data=st.session_state.pdf_es, file_name=f"{f_prod}_{f_cliente}_{orden_id}_ES.pdf", mime="application/pdf", use_container_width=True)
     with c2:
-        st.download_button("📝 Descargar Word", data=st.session_state.word_data, file_name=f"{f_prod}_{f_cliente}_{orden_id}_{sufijo_id}.docx", mime="application/vnd.openxmlformats-officedocument.wordprocessingml.document", use_container_width=True)
+        st.download_button("📝 Descargar Word (ES)", data=st.session_state.word_es, file_name=f"{f_prod}_{f_cliente}_{orden_id}_ES.docx", mime="application/vnd.openxmlformats-officedocument.wordprocessingml.document", use_container_width=True)
     with c3:
-        st.download_button("🔤 Descargar TXT", data=st.session_state.txt_data, file_name=f"Status_{orden_id}_{sufijo_id}.txt", mime="text/plain", use_container_width=True)
+        st.download_button("🔤 Descargar TXT (ES)", data=st.session_state.txt_es, file_name=f"Status_{orden_id}_ES.txt", mime="text/plain", use_container_width=True)
+        
+    st.markdown("### 🇺🇸 Descargas en Inglés")
+    c4, c5, c6 = st.columns(3)
+    with c4:
+        st.download_button("📄 Descargar PDF (EN)", data=st.session_state.pdf_en, file_name=f"{f_prod}_{f_cliente}_{orden_id}_EN.pdf", mime="application/pdf", use_container_width=True)
+    with c5:
+        st.download_button("📝 Descargar Word (EN)", data=st.session_state.word_en, file_name=f"{f_prod}_{f_cliente}_{orden_id}_EN.docx", mime="application/vnd.openxmlformats-officedocument.wordprocessingml.document", use_container_width=True)
+    with c6:
+        st.download_button("🔤 Descargar TXT (EN)", data=st.session_state.txt_en, file_name=f"Status_{orden_id}_EN.txt", mime="text/plain", use_container_width=True)
