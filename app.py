@@ -158,7 +158,6 @@ def generar_pdf(datos, secciones_activas, lista_imgs, idioma):
         
         for idx, i in enumerate(lista_imgs):
             try:
-                # Usamos BytesIO para que pueda leer de los bytes crudos en memoria multiples veces
                 img_stream = BytesIO(i['imagen_raw'])
                 img_obj = RLImage(img_stream, width=3.4*inch, height=2.2*inch)
                 celda = [img_obj, Spacer(1, 4), Paragraph(f"{l['figura']} {idx+1}. {i['descripcion']}", est_fig)]
@@ -195,6 +194,30 @@ def generar_word(datos, secciones_activas, lista_imgs, idioma):
     l = LBL[idioma]
     doc = Document()
     
+    # --- INCORPORACIÓN DE LOGOS EN WORD ---
+    logo_izq_path, logo_der_path = "logo.png", "logo_derecho.png"
+    
+    if os.path.exists(logo_izq_path) or os.path.exists(logo_der_path):
+        # Crear tabla invisible de 1 fila y 2 columnas
+        tabla_logos = doc.add_table(rows=1, cols=2)
+        celda_izq = tabla_logos.cell(0, 0)
+        celda_der = tabla_logos.cell(0, 1)
+        
+        if os.path.exists(logo_izq_path):
+            p_izq = celda_izq.paragraphs[0]
+            run_izq = p_izq.add_run()
+            run_izq.add_picture(logo_izq_path, width=Inches(1.4))
+            p_izq.alignment = WD_ALIGN_PARAGRAPH.LEFT
+            
+        if os.path.exists(logo_der_path):
+            p_der = celda_der.paragraphs[0]
+            run_der = p_der.add_run()
+            run_der.add_picture(logo_der_path, width=Inches(1.4))
+            p_der.alignment = WD_ALIGN_PARAGRAPH.RIGHT
+            
+        doc.add_paragraph() # Espaciador debajo de los logos
+    # --- FIN DE LOGOS ---
+
     h1 = doc.add_heading(l['titulo'], level=1)
     h1.alignment = WD_ALIGN_PARAGRAPH.CENTER
     doc.add_paragraph()
@@ -261,7 +284,7 @@ def generar_txt_contenido(datos, secciones_activas, idioma):
     return txt
 
 # --- 5. INTERFAZ ---
-st.title("REPORTES TECNICOS RECLAMO AL PROVEEDOR")
+st.title("🚀 Gestión de Reportes Técnicos (Bilingüe)")
 
 orden_id = st.text_input("Ingrese número de Orden")
 c_v, s_v, p_v, f_v, ff_v = "", "", "", "", date.today()
@@ -285,7 +308,7 @@ with col2:
     f_tecnico = st.selectbox("Revisado por (Técnico)", options=LISTA_TECNICOS)
     f_fac = st.text_input("Factura", value=f_v)
     f_fec_fac = st.date_input("Fecha Factura", value=ff_v)
-    f_fec_rep = st.date_input("Fecha del Reporte", value=date.today()) # <-- NUEVO CAMPO DE FECHA
+    f_fec_rep = st.date_input("Fecha del Reporte", value=date.today())
     f_serie = st.text_input("Serie/Artículo", value=s_v)
 
 st.markdown("---")
@@ -298,23 +321,23 @@ texto_concl_default = TEXTOS_CONCLUSIONES.get(tipo_rep, "")
 
 c_chk1, c_txt1 = st.columns([1, 10])
 with c_chk1: inc_rf = st.checkbox("Incluir", value=True, key="c1")
-with c_txt1: f_rev_fisica = st.text_area("Revisión Física", value=def_rf)
+with c_txt1: f_rev_fisica = st.text_area("1. Revisión Física", value=def_rf)
 
 c_chk2, c_txt2 = st.columns([1, 10])
 with c_chk2: inc_ing = st.checkbox("Incluir", value=True, key="c2")
-with c_txt2: f_ingreso_tec = st.text_area("Ingresa a servicio técnico")
+with c_txt2: f_ingreso_tec = st.text_area("2. Ingresa a servicio técnico")
 
 c_chk3, c_txt3 = st.columns([1, 10])
 with c_chk3: inc_re = st.checkbox("Incluir", value=True, key="c3")
-with c_txt3: f_rev_electro = st.text_area("Revisión electro-electrónica-mecanica", value=def_re)
+with c_txt3: f_rev_electro = st.text_area("3. Revisión electro-electrónica-mecanica", value=def_re)
 
 c_chk4, c_txt4 = st.columns([1, 10])
 with c_chk4: inc_obs = st.checkbox("Incluir", value=True, key="c4")
-with c_txt4: f_obs = st.text_area("Observaciones", value=def_obs)
+with c_txt4: f_obs = st.text_area("4. Observaciones", value=def_obs)
 
 c_chk5, c_txt5 = st.columns([1, 10])
 with c_chk5: inc_con = st.checkbox("Incluir", value=True, key="c5")
-with c_txt5: f_concl = st.text_area("Conclusiones", value=texto_concl_default, height=150)
+with c_txt5: f_concl = st.text_area("5. Conclusiones", value=texto_concl_default, height=150)
 
 st.markdown("---")
 st.markdown("### 📸 Evidencia Fotográfica")
@@ -335,7 +358,6 @@ st.markdown("---")
 if st.button("💾 GENERAR ARCHIVOS EN ESPAÑOL E INGLÉS", use_container_width=True):
     with st.spinner("Generando los 6 documentos simultáneamente..."):
         
-        # Procesar imágenes una vez, y traducir descripciones
         imgs_procesadas_es = []
         imgs_procesadas_en = []
         for item in lista_imgs_temp:
@@ -344,7 +366,7 @@ if st.button("💾 GENERAR ARCHIVOS EN ESPAÑOL E INGLÉS", use_container_width=
                 if p_img.mode != 'RGB': p_img = p_img.convert('RGB')
                 img_byte = BytesIO()
                 p_img.save(img_byte, format='JPEG', quality=95)
-                img_raw = img_byte.getvalue() # Guardar en crudo para reutilizar
+                img_raw = img_byte.getvalue() 
                 
                 desc_es = item['desc']
                 desc_en = traducir_texto(desc_es, "Inglés")
@@ -356,7 +378,7 @@ if st.button("💾 GENERAR ARCHIVOS EN ESPAÑOL E INGLÉS", use_container_width=
 
         # --- DATOS EN ESPAÑOL ---
         secciones_es = []
-        titulos_es = ["Revisión Física", "Ingresa a servicio técnico", "Revisión electro-electrónica-mecanica", "Observaciones", "Conclusiones"]
+        titulos_es = ["1. Revisión Física", "2. Ingresa a servicio técnico", "3. Revisión electro-electrónica-mecanica", "4. Observaciones", "5. Conclusiones"]
         
         if inc_rf: secciones_es.append((titulos_es[0], f_rev_fisica))
         if inc_ing: secciones_es.append((titulos_es[1], f_ingreso_tec))
@@ -386,19 +408,16 @@ if st.button("💾 GENERAR ARCHIVOS EN ESPAÑOL E INGLÉS", use_container_width=
             "fecha_reporte": f_fec_rep, "tipo_reporte": traducir_texto(tipo_rep, "Inglés")
         }
 
-        # Generar archivos ES
         st.session_state.pdf_es = generar_pdf(datos_es, secciones_es, imgs_procesadas_es, "Español")
         st.session_state.word_es = generar_word(datos_es, secciones_es, imgs_procesadas_es, "Español")
         st.session_state.txt_es = generar_txt_contenido(datos_es, secciones_es, "Español")
         
-        # Generar archivos EN
         st.session_state.pdf_en = generar_pdf(datos_en, secciones_en, imgs_procesadas_en, "Inglés")
         st.session_state.word_en = generar_word(datos_en, secciones_en, imgs_procesadas_en, "Inglés")
         st.session_state.txt_en = generar_txt_contenido(datos_en, secciones_en, "Inglés")
         
         st.success("✅ ¡Los 6 archivos fueron generados exitosamente!")
 
-# Mostrar botones de descarga si los datos existen
 if st.session_state.pdf_es:
     st.markdown("### 🇪🇸 Descargas en Español")
     c1, c2, c3 = st.columns(3)
