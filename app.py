@@ -64,13 +64,25 @@ TEXTOS_CONCLUSIONES = {
 
 # --- 3. FUNCIONES DE TRADUCCIÓN ---
 def traducir_texto(texto, idioma):
-    if idioma == "Español" or not str(texto).strip():
+    if idioma == "Español" or not texto:
         return texto
-    try:
-        traductor = GoogleTranslator(source='es', target='en')
-        return traductor.translate(str(texto))
-    except Exception as e:
-        return f"[Error de traducción] {texto}"
+    
+    texto_str = str(texto).strip()
+    if not texto_str or texto_str.lower() in ["nan", "none", "0"]:
+        return texto
+
+    # Sistema de reintentos para prevenir fallas por saturación o conexión
+    for _ in range(2):
+        try:
+            traductor = GoogleTranslator(source='es', target='en')
+            resultado = traductor.translate(texto_str)
+            if resultado:
+                return resultado
+        except Exception:
+            pass
+            
+    # Devuelve el texto original de forma segura si la red o servicio web falla
+    return texto
 
 # Títulos y etiquetas dinámicas según el tipo de reporte seleccionado e idioma
 def obtener_titulos_por_tipo(tipo_rep, idioma):
