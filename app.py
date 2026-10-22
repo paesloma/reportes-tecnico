@@ -12,19 +12,11 @@ from reportlab.platypus import SimpleDocTemplate, Paragraph, Spacer, Image as RL
 from reportlab.lib.units import inch
 from reportlab.lib import colors
 
-# Importaciones de python-docx (Word)
-from docx import Document
-from docx.shared import Inches, Pt, RGBColor
-from docx.enum.text import WD_ALIGN_PARAGRAPH
-
-# Importación de traductor gratuito (Sin API Key)
-from deep_translator import GoogleTranslator
-
 # --- 1. CONFIGURACIÓN Y PERSISTENCIA ---
 st.set_page_config(page_title="Generador de Reportes", page_icon="🔧", layout="wide")
 
-# Inicialización de estados para los 6 documentos
-claves_estado = ['pdf_es', 'word_es', 'txt_es', 'pdf_en', 'word_en', 'txt_en']
+# Inicialización de estados
+claves_estado = ['pdf_es', 'txt_es']
 for key in claves_estado:
     if key not in st.session_state:
         st.session_state[key] = None
@@ -62,66 +54,43 @@ TEXTOS_CONCLUSIONES = {
     "RECLAMO AL PROVEEDOR": "En marco de las políticas de garantía que mantienen un orden en el proceso se concluye:\nEl daño presentado corresponde a un defecto de manufactura debido al diagnostico realizado. Solicitamos su colaboración con el proceso de Reclamo al Proveedor."
 }
 
-# --- 3. FUNCIONES DE TRADUCCIÓN ---
-def traducir_texto(texto, idioma):
-    if idioma == "Español" or not texto:
-        return texto
-    
-    texto_str = str(texto).strip()
-    if not texto_str or texto_str.lower() in ["nan", "none", "0"]:
-        return texto
-
-    # Sistema de reintentos para prevenir fallas por saturación o conexión
-    for _ in range(2):
-        try:
-            traductor = GoogleTranslator(source='es', target='en')
-            resultado = traductor.translate(texto_str)
-            if resultado:
-                return resultado
-        except Exception:
-            pass
-            
-    # Devuelve el texto original de forma segura si la red o servicio web falla
-    return texto
-
-# Títulos y etiquetas dinámicas según el tipo de reporte seleccionado e idioma
-def obtener_titulos_por_tipo(tipo_rep, idioma):
-    tipo_upper = tipo_rep.upper()
-    if idioma == "Español":
-        if "GARANTIA" in tipo_upper:
-            return "INFORME FUERA DE GARANTIA"
-        elif "TECNICO" in tipo_upper:
-            return "INFORME TECNICO"
-        elif "PROVEEDOR" in tipo_upper:
-            return "RECLAMO AL PROVEEDOR"
-        return tipo_rep
-    else: # Inglés
-        if "GARANTIA" in tipo_upper:
-            return "OUT OF WARRANTY REPORT"
-        elif "TECNICO" in tipo_upper:
-            return "TECHNICAL REPORT"
-        elif "PROVEEDOR" in tipo_upper:
-            return "SUPPLIER CLAIM REPORT"
-        return traducir_texto(tipo_rep, "Inglés")
-
-LBL = {
-    "Español": {
-        "orden": "Orden", "fac": "Factura", "cliente": "Cliente",
-        "fec_fac": "Fecha factura", "prod": "Articulo", "serie": "Serie", "realizador": "Realizado por",
-        "fec_rep": "Fecha reclamo", "revisador": "Revisado por", "evidencia": "EVIDENCIA DE IMÁGENES",
-        "figura": "Figura", "marca": "Marca", "modelo": "Modelo", "repuesto": "Repuesto",
-        "codigo": "Código", "cantidad": "Cantidad", "reporte": "Reporte"
-    },
-    "Inglés": {
-        "orden": "Order", "fac": "Invoice", "cliente": "Customer",
-        "fec_fac": "Invoice Date", "prod": "Article", "serie": "Serial/Code", "realizador": "Prepared by",
-        "fec_rep": "Claim Date", "revisador": "Reviewed by", "evidencia": "IMAGE EVIDENCE",
-        "figura": "Figure", "marca": "Brand", "modelo": "Model", "repuesto": "Spare Part",
-        "codigo": "Code", "cantidad": "Quantity", "reporte": "Report"
-    }
+# Plantillas de Observaciones
+PLANTILLAS_OBSERVACIONES = {
+    "Personalizado (Por defecto)": "Luego de la revisión del artículo se observa lo siguiente: ",
+    "Negación - Humedad interna (Tarjetas)": "Luego de la revisión del artículo se observa lo siguiente: la presencia de humedad interna en las tarjetas o componentes electrónicos. La acumulación de líquido o sulfatación en el sistema altera su funcionamiento y anula la garantía de forma inmediata, al tratarse de una afectación por agentes externos.",
+    "Negación - Humedad en panel (Pantalla)": "Luego de la revisión del artículo se observa lo siguiente: la presencia de humedad interna en el panel de visualización (pantalla). La filtración o condensación de líquido entre las capas del display genera manchas permanentes y cortocircuitos internos, condición provocada por factores ambientales o manipulación externa no cubierta por la garantía.",
+    "Negación - Ingreso de insectos": "Luego de la revisión del artículo se observa lo siguiente: el ingreso de insectos al interior del chasis. La acumulación de plagas o residuos biológicos sobre los circuitos electrónicos provoca cortocircuitos y fallas severas, lo cual constituye un factor externo excluido de la garantía del fabricante.",
+    "Negación - Golpe o rotura de pantalla": "Luego de la revisión del artículo se observa lo siguiente: un golpe o rotura en la pantalla. Al presentar un impacto físico visible o fisura interna en el panel de visualización, la avería se clasifica como daño accidental o manipulación inadecuada, quedando fuera de la cobertura de garantía.",
+    "Negación - Problemas eléctricos (Variaciones)": "Luego de la revisión del artículo se observa lo siguiente: una falla por problemas eléctricos derivados de una conexión ineficiente (variaciones severas de voltaje, tomacorrientes defectuosos o falta de puesta a tierra). La garantía cubre únicamente defectos de fábrica, por lo que los daños ocasionados por sobretensiones o anomalías en la red eléctrica externa no aplican para reparación sin costo."
 }
 
-# --- 4. FUNCIONES DE GENERACIÓN ---
+if "obs_text" not in st.session_state:
+    st.session_state.obs_text = PLANTILLAS_OBSERVACIONES["Personalizado (Por defecto)"]
+
+def actualizar_observacion():
+    seleccion = st.session_state.sel_plantilla_obs
+    st.session_state.obs_text = PLANTILLAS_OBSERVACIONES[seleccion]
+
+# Títulos y etiquetas dinámicas según el tipo de reporte seleccionado
+def obtener_titulos_por_tipo(tipo_rep):
+    tipo_upper = tipo_rep.upper()
+    if "GARANTIA" in tipo_upper:
+        return "INFORME FUERA DE GARANTIA"
+    elif "TECNICO" in tipo_upper:
+        return "INFORME TECNICO"
+    elif "PROVEEDOR" in tipo_upper:
+        return "RECLAMO AL PROVEEDOR"
+    return tipo_rep
+
+LBL = {
+    "orden": "Orden", "fac": "Factura", "cliente": "Cliente",
+    "fec_fac": "Fecha factura", "prod": "Articulo", "serie": "Serie", "realizador": "Realizado por",
+    "fec_rep": "Fecha reclamo", "revisador": "Revisado por", "evidencia": "EVIDENCIA DE IMÁGENES",
+    "figura": "Figura", "marca": "Marca", "modelo": "Modelo", "repuesto": "Repuesto",
+    "codigo": "Código", "cantidad": "Cantidad", "reporte": "Reporte"
+}
+
+# --- 3. FUNCIONES DE GENERACIÓN ---
 def agregar_marca_agua(canvas, doc):
     watermark_file = "watermark.png"
     if os.path.exists(watermark_file):
@@ -133,8 +102,8 @@ def agregar_marca_agua(canvas, doc):
         except:
             pass
 
-def generar_pdf(datos, secciones_activas, lista_imgs, idioma):
-    l = LBL[idioma]
+def generar_pdf(datos, secciones_activas, lista_imgs):
+    l = LBL
     buffer = BytesIO()
     doc = SimpleDocTemplate(buffer, pagesize=letter, topMargin=0.4*inch, bottomMargin=0.4*inch, leftMargin=0.5*inch, rightMargin=0.5*inch)
     color_azul = colors.HexColor("#0056b3")
@@ -164,7 +133,7 @@ def generar_pdf(datos, secciones_activas, lista_imgs, idioma):
     story.append(Spacer(1, 10))
     
     # Título dinámico basado en la opción seleccionada
-    titulo_principal = obtener_titulos_por_tipo(datos['tipo_reporte_original'], idioma)
+    titulo_principal = obtener_titulos_por_tipo(datos['tipo_reporte_original'])
     story.append(Paragraph(titulo_principal, est_titulo))
     story.append(Spacer(1, 15))
     
@@ -241,114 +210,9 @@ def generar_pdf(datos, secciones_activas, lista_imgs, idioma):
     buffer.seek(0)
     return buffer.read()
 
-def generar_word(datos, secciones_activas, lista_imgs, idioma):
-    l = LBL[idioma]
-    doc = Document()
-    
-    # Incorporación de Logos
-    logo_izq_path, logo_der_path = "logo.png", "logo_derecho.png"
-    if os.path.exists(logo_izq_path) or os.path.exists(logo_der_path):
-        tabla_logos = doc.add_table(rows=1, cols=2)
-        celda_izq = tabla_logos.cell(0, 0)
-        celda_der = tabla_logos.cell(0, 1)
-        if os.path.exists(logo_izq_path):
-            p_izq = celda_izq.paragraphs[0]
-            p_izq.add_run().add_picture(logo_izq_path, width=Inches(1.4))
-            p_izq.alignment = WD_ALIGN_PARAGRAPH.LEFT
-        if os.path.exists(logo_der_path):
-            p_der = celda_der.paragraphs[0]
-            p_der.add_run().add_picture(logo_der_path, width=Inches(1.4))
-            p_der.alignment = WD_ALIGN_PARAGRAPH.RIGHT
-        doc.add_paragraph() 
-
-    # Título dinámico
-    titulo_principal = obtener_titulos_por_tipo(datos['tipo_reporte_original'], idioma)
-    h1 = doc.add_heading(titulo_principal, level=1)
-    h1.alignment = WD_ALIGN_PARAGRAPH.CENTER
-    doc.add_paragraph()
-
-    fac_txt = "STOCK" if str(datos['factura']).strip() in ["0", "nan", ""] else datos['factura']
-    es_reclamo = "RECLAMO AL PROVEEDOR" in str(datos['tipo_reporte_original']).upper()
-
-    if es_reclamo:
-        table = doc.add_table(rows=6, cols=4)
-        table.style = 'Table Grid'
-        celdas = table.rows
-        
-        celdas[0].cells[0].paragraphs[0].add_run(f"{l['orden']}:").bold = True
-        celdas[0].cells[1].text = str(datos['orden'])
-        celdas[0].cells[2].paragraphs[0].add_run(f"{l['fec_rep']}:").bold = True
-        celdas[0].cells[3].text = str(datos['fecha_reporte'])
-        
-        celdas[1].cells[0].paragraphs[0].add_run(f"{l['cliente']}:").bold = True
-        celdas[1].cells[1].text = str(datos['cliente'])
-        celdas[1].cells[2].paragraphs[0].add_run(f"{l['prod']}:").bold = True
-        celdas[1].cells[3].text = str(datos['producto'])
-        
-        celdas[2].cells[0].paragraphs[0].add_run(f"{l['fac']}:").bold = True
-        celdas[2].cells[1].text = str(fac_txt)
-        celdas[2].cells[2].paragraphs[0].add_run(f"{l['marca']}:").bold = True
-        celdas[2].cells[3].text = str(datos['marca'])
-        
-        celdas[3].cells[0].paragraphs[0].add_run(f"{l['fec_fac']}:").bold = True
-        celdas[3].cells[1].text = str(datos['fecha_factura'])
-        celdas[3].cells[2].paragraphs[0].add_run(f"{l['modelo']}:").bold = True
-        celdas[3].cells[3].text = str(datos['modelo'])
-        
-        celdas[4].cells[0].paragraphs[0].add_run(f"{l['repuesto']}:").bold = True
-        celdas[4].cells[1].text = str(datos['repuesto'])
-        celdas[4].cells[2].paragraphs[0].add_run(f"{l['codigo']}:").bold = True
-        celdas[4].cells[3].text = str(datos['codigo'])
-        
-        celdas[5].cells[0].paragraphs[0].add_run(f"{l['cantidad']}:").bold = True
-        celdas[5].cells[1].text = str(datos['cantidad'])
-        celdas[5].cells[2].paragraphs[0].add_run(f"{l['reporte']}:").bold = True
-        
-        run_rep = celdas[5].cells[3].paragraphs[0].add_run(str(datos['tipo_reporte']))
-        run_rep.font.color.rgb = RGBColor(255, 0, 0) 
-    else:
-        table = doc.add_table(rows=4, cols=2)
-        table.style = 'Table Grid'
-        celdas = table.rows
-        celdas[0].cells[0].text = f"{l['orden']}: {datos['orden']}"
-        celdas[0].cells[1].text = f"{l['fac']}: {fac_txt}"
-        celdas[1].cells[0].text = f"{l['cliente']}: {datos['cliente']}"
-        celdas[1].cells[1].text = f"{l['fec_fac']}: {datos['fecha_factura']}"
-        celdas[2].cells[0].text = f"{l['prod']}: {datos['producto']}"
-        celdas[2].cells[1].text = f"{l['serie']}: {datos['serie']}"
-        celdas[3].cells[0].text = f"{l['realizador']}: {datos['realizador']}"
-        celdas[3].cells[1].text = f"{l['fec_rep']}: {datos['fecha_reporte']}"
-    
-    doc.add_paragraph()
-
-    for tit, cont in secciones_activas:
-        doc.add_heading(tit, level=2)
-        doc.add_paragraph(cont)
-
-    if lista_imgs:
-        doc.add_heading(l['evidencia'], level=2)
-        for idx, i in enumerate(lista_imgs):
-            try:
-                img_stream = BytesIO(i['imagen_raw'])
-                doc.add_picture(img_stream, width=Inches(4.5))
-                p = doc.add_paragraph(f"{l['figura']} {idx+1}. {i['descripcion']}")
-                p.alignment = WD_ALIGN_PARAGRAPH.CENTER
-            except Exception as e:
-                doc.add_paragraph(f"Error cargando imagen {idx+1}: {e}")
-
-    doc.add_paragraph("\n\n\n")
-    p_firmas = doc.add_paragraph()
-    p_firmas.add_run(f"{l['realizador']}:\t\t\t\t\t{l['revisador']}:\n").bold = True
-    p_firmas.add_run(f"{datos['realizador']}\t\t\t\t\t{datos['tecnico']}")
-    
-    buffer = BytesIO()
-    doc.save(buffer)
-    buffer.seek(0)
-    return buffer.read()
-
-def generar_txt_contenido(datos, secciones_activas, idioma):
-    l = LBL[idioma]
-    titulo_txt = obtener_titulos_por_tipo(datos['tipo_reporte_original'], idioma)
+def generar_txt_contenido(datos, secciones_activas):
+    l = LBL
+    titulo_txt = obtener_titulos_por_tipo(datos['tipo_reporte_original'])
     fac_txt = "STOCK" if str(datos['factura']).strip() in ["0", "nan", ""] else datos['factura']
     
     txt = f"{titulo_txt}\n" + "="*30 + "\n\n"
@@ -376,7 +240,7 @@ def generar_txt_contenido(datos, secciones_activas, idioma):
     txt += f"Atentamente,\n{datos['realizador']}\nCoordinador Postventa"
     return txt
 
-# --- 5. INTERFAZ ---
+# --- 4. INTERFAZ ---
 st.title("🚀 Reportes Técnicos")
 
 orden_id = st.text_input("Ingrese número de Orden")
@@ -422,7 +286,6 @@ st.markdown("---")
 st.markdown("### 📝 Contenido del Reporte (Selecciona qué incluir)")
 def_rf = f"Ingresa a servicio técnico {f_prod}. Se observa el uso continuo del artículo."
 def_re = "Se procede a revisar el sistema de alimentación de energía y sus líneas de conexión.\nSe procede a revisar el sistema electrónico del equipo.\nSe procede a revisar el sistema mecanico de equipo"
-def_obs = "Luego de la revisión del artículo se observa lo siguiente: "
 texto_concl_default = TEXTOS_CONCLUSIONES.get(tipo_rep, "")
 
 c_chk1, c_txt1 = st.columns([1, 10])
@@ -431,19 +294,22 @@ with c_txt1: f_rev_fisica = st.text_area("Revisión Física", value=def_rf)
 
 c_chk2, c_txt2 = st.columns([1, 10])
 with c_chk2: inc_ing = st.checkbox("Incluir", value=True, key="c2")
-with c_txt2: f_ingreso_tec = st.text_area("Ingresa a servicio técnico")
+with c_txt2: f_ingreso_tec = st.text_area("Ingresa a servicio técnico", value="Revisión inicial del equipo.")
 
 c_chk3, c_txt3 = st.columns([1, 10])
 with c_chk3: inc_re = st.checkbox("Incluir", value=True, key="c3")
 with c_txt3: f_rev_electro = st.text_area("Revisión electro-electrónica-mecanica", value=def_re)
 
+# Sección de Observaciones con Plantillas de Negación de Garantía
 c_chk4, c_txt4 = st.columns([1, 10])
 with c_chk4: inc_obs = st.checkbox("Incluir", value=True, key="c4")
-with c_txt4: f_obs = st.text_area("Observaciones", value=def_obs)
+with c_txt4: 
+    st.selectbox("Plantillas de Observación (Opcional)", options=list(PLANTILLAS_OBSERVACIONES.keys()), key="sel_plantilla_obs", on_change=actualizar_observacion)
+    f_obs = st.text_area("Observaciones", value=st.session_state.obs_text, height=120)
 
 c_chk5, c_txt5 = st.columns([1, 10])
 with c_chk5: inc_con = st.checkbox("Incluir", value=True, key="c5")
-with c_txt5: f_concl = st.text_area("Conclusiones", value=texto_concl_default, height=150)
+with c_txt5: f_concl = st.text_area("Conclusiones", value=texto_concl_default, height=100)
 
 st.markdown("---")
 st.markdown("### 📸 Evidencia Fotográfica")
@@ -461,11 +327,10 @@ if uploaded_files:
 
 st.markdown("---")
 
-if st.button("💾 GENERAR ARCHIVOS EN ESPAÑOL E INGLÉS", use_container_width=True):
-    with st.spinner("Generando los 6 documentos simultáneamente..."):
+if st.button("💾 GENERAR ARCHIVOS (PDF Y TXT)", use_container_width=True):
+    with st.spinner("Generando documentos..."):
         
         imgs_procesadas_es = []
-        imgs_procesadas_en = []
         for item in lista_imgs_temp:
             try:
                 p_img = PilImage.open(item['file'])
@@ -475,10 +340,7 @@ if st.button("💾 GENERAR ARCHIVOS EN ESPAÑOL E INGLÉS", use_container_width=
                 img_raw = img_byte.getvalue() 
                 
                 desc_es = item['desc']
-                desc_en = traducir_texto(desc_es, "Inglés")
-                
                 imgs_procesadas_es.append({"imagen_raw": img_raw, "descripcion": desc_es})
-                imgs_procesadas_en.append({"imagen_raw": img_raw, "descripcion": desc_en})
             except Exception as e:
                 st.error(f"Error procesando imagen: {e}")
 
@@ -499,49 +361,15 @@ if st.button("💾 GENERAR ARCHIVOS EN ESPAÑOL E INGLÉS", use_container_width=
             "marca": f_marca, "modelo": f_modelo, "repuesto": f_repuesto, "codigo": f_codigo, "cantidad": f_cantidad
         }
 
-        # --- DATOS EN INGLÉS ---
-        secciones_en = []
-        titulos_en = ["1. Physical Inspection", "2. Entry to Technical Service", "3. Electro-Mechanical Review", "4. Observations", "5. Conclusions"]
+        st.session_state.pdf_es = generar_pdf(datos_es, secciones_es, imgs_procesadas_es)
+        st.session_state.txt_es = generar_txt_contenido(datos_es, secciones_es)
         
-        if inc_rf: secciones_en.append((titulos_en[0], traducir_texto(f_rev_fisica, "Inglés")))
-        if inc_ing: secciones_en.append((titulos_en[1], traducir_texto(f_ingreso_tec, "Inglés")))
-        if inc_re: secciones_en.append((titulos_en[2], traducir_texto(f_rev_electro, "Inglés")))
-        if inc_obs: secciones_en.append((titulos_en[3], traducir_texto(f_obs, "Inglés")))
-        if inc_con: secciones_en.append((titulos_en[4], traducir_texto(f_concl, "Inglés")))
-
-        datos_en = {
-            "orden": orden_id, "cliente": f_cliente, "factura": f_fac, "fecha_factura": f_fec_fac,
-            "producto": traducir_texto(f_prod, "Inglés"), "serie": f_serie, "tecnico": f_tecnico, "realizador": f_realizador,
-            "fecha_reporte": f_fec_rep, "tipo_reporte": traducir_texto(tipo_rep, "Inglés"), "tipo_reporte_original": tipo_rep,
-            "marca": traducir_texto(f_marca, "Inglés"), "modelo": traducir_texto(f_modelo, "Inglés"), 
-            "repuesto": traducir_texto(f_repuesto, "Inglés"), "codigo": f_codigo, "cantidad": f_cantidad
-        }
-
-        st.session_state.pdf_es = generar_pdf(datos_es, secciones_es, imgs_procesadas_es, "Español")
-        st.session_state.word_es = generar_word(datos_es, secciones_es, imgs_procesadas_es, "Español")
-        st.session_state.txt_es = generar_txt_contenido(datos_es, secciones_es, "Español")
-        
-        st.session_state.pdf_en = generar_pdf(datos_en, secciones_en, imgs_procesadas_en, "Inglés")
-        st.session_state.word_en = generar_word(datos_en, secciones_en, imgs_procesadas_en, "Inglés")
-        st.session_state.txt_en = generar_txt_contenido(datos_en, secciones_en, "Inglés")
-        
-        st.success("✅ ¡Los 6 archivos fueron generados exitosamente!")
+        st.success("✅ ¡Los archivos PDF y TXT fueron generados exitosamente!")
 
 if st.session_state.pdf_es:
-    st.markdown("### 🇪🇸 Descargas en Español")
-    c1, c2, c3 = st.columns(3)
+    st.markdown("### 📥 Descargar Documentos")
+    c1, c2 = st.columns(2)
     with c1:
-        st.download_button("📄 Descargar PDF (ES)", data=st.session_state.pdf_es, file_name=f"{f_prod}_{f_cliente}_{orden_id}_ES.pdf", mime="application/pdf", use_container_width=True)
+        st.download_button("📄 Descargar PDF", data=st.session_state.pdf_es, file_name=f"{f_prod}_{f_cliente}_{orden_id}.pdf", mime="application/pdf", use_container_width=True)
     with c2:
-        st.download_button("📝 Descargar Word (ES)", data=st.session_state.word_es, file_name=f"{f_prod}_{f_cliente}_{orden_id}_ES.docx", mime="application/vnd.openxmlformats-officedocument.wordprocessingml.document", use_container_width=True)
-    with c3:
-        st.download_button("🔤 Descargar TXT (ES)", data=st.session_state.txt_es, file_name=f"Status_{orden_id}_ES.txt", mime="text/plain", use_container_width=True)
-        
-    st.markdown("### 🇺🇸 Descargas en Inglés")
-    c4, c5, c6 = st.columns(3)
-    with c4:
-        st.download_button("📄 Descargar PDF (EN)", data=st.session_state.pdf_en, file_name=f"{f_prod}_{f_cliente}_{orden_id}_EN.pdf", mime="application/pdf", use_container_width=True)
-    with c5:
-        st.download_button("📝 Descargar Word (EN)", data=st.session_state.word_en, file_name=f"{f_prod}_{f_cliente}_{orden_id}_EN.docx", mime="application/vnd.openxmlformats-officedocument.wordprocessingml.document", use_container_width=True)
-    with c6:
-        st.download_button("🔤 Descargar TXT (EN)", data=st.session_state.txt_en, file_name=f"Status_{orden_id}_EN.txt", mime="text/plain", use_container_width=True)
+        st.download_button("🔤 Descargar TXT", data=st.session_state.txt_es, file_name=f"Status_{orden_id}.txt", mime="text/plain", use_container_width=True)
