@@ -32,7 +32,7 @@ def cargar_datos_servicios():
                 nombres_clave = {'Serie/Artículo': 'Serie', 'Fec. Fac. Min': 'Fec_Fac_Min', 'Fac. Min': 'Fac_Min'}
                 df = df.rename(columns=nombres_clave)
                 return df
-            except:
+            except Exception:
                 continue
     return pd.DataFrame(columns=['Orden', 'Cliente', 'Serie', 'Producto', 'Fec_Fac_Min', 'Fac_Min'])
 
@@ -43,20 +43,24 @@ LISTA_TECNICOS = [
     "Tec. Xavier Ramón", "Tec. Juan Diego Quezada", "Tec. Javier Quiguango",
     "Tec. Wilson Quiguango", "Tec. Carlos Jama", "Tec. Manuel Vera",
     "Tec. Juan Farez", "Tec. Santiago Farez", "Tec.Ronald Paladinez", "Tec. Saul Vite",
-    "Tec. Miguel Meza", "Tec German Tenemaza", "CISTRONIC", "Taller Externo","Tec. Jorge Pintado"
+    "Tec. Miguel Meza", "Tec German Tenemaza", "CISTRONIC", "Taller Externo", "Tec. Jorge Pintado"
 ]
-LISTA_REALIZADORES = ["Ing. Henry Beltran", "Ing. Pablo Lopez", "Ing. Christian Calle", "Ing. Guillermo Ortiz", "Ing. Adrian Aguilar", "Ing. John Juela"]
+LISTA_REALIZADORES = [
+    "Ing. Henry Beltran", "Ing. Pablo Lopez", "Ing. Christian Calle",
+    "Ing. Guillermo Ortiz", "Ing. Adrian Aguilar", "Ing. John Juela"
+]
 OPCIONES_REPORTE = ["FUERA DE GARANTIA", "INFORME TECNICO", "RECLAMO AL PROVEEDOR"]
 
 TEXTOS_CONCLUSIONES = {
-    "FUERA DE GARANTIA": "Tras la evaluación técnica, se determina que la falla presentada no responde a defectos de fabricación ni de materiales, sino a factores externos o condiciones de operación inadecuadas.En consecuencia, el equipo queda excluido de la cobertura de garantía",
+    "FUERA DE GARANTIA": "Tras la evaluación técnica, se determina que la falla presentada no responde a defectos de fabricación ni de materiales, sino a factores externos o condiciones de operación inadecuadas. En consecuencia, el equipo queda excluido de la cobertura de garantía.",
     "INFORME TECNICO": "De acuerdo con la evaluación realizada, el equipo no presenta fallas y funciona correctamente según las indicaciones del fabricante, entregándose en óptimas condiciones de operación.",
     "RECLAMO AL PROVEEDOR": "Tras la evaluación técnica efectuada, se confirma que el daño identificado responde a un defecto de manufactura. Por lo tanto, se solicita su colaboración para proceder con la gestión de reclamo al proveedor."
+}
 
 # Plantillas de Observaciones
 PLANTILLAS_OBSERVACIONES = {
     "Personalizado (Por defecto)": "Luego de la revisión del artículo se observa lo siguiente: ",
-    "Negación - Humedad interna": "Luego de realizar la revisión física e interna del artículo, se constató el ingreso y acumulación de humedad que compromete directamente a la tarjeta electrónica, los integrados COF y el cable flex. Como consecuencia directa de esta exposición a la humedad, los componentes afectados presentan signos evidentes de sulfatación y corrosión en sus pistas y puntos de soldadura",
+    "Negación - Humedad interna": "Luego de realizar la revisión física e interna del artículo, se constató el ingreso y acumulación de humedad que compromete directamente a la tarjeta electrónica, los integrados COF y el cable flex. Como consecuencia directa de esta exposición a la humedad, los componentes afectados presentan signos evidentes de sulfatación y corrosión en sus pistas y puntos de soldadura.",
     "Negación - Ingreso de insectos": "Tras la inspección técnica del artículo, se evidenció el ingreso y alojamiento de insectos en el interior del chasis. La presencia de estas plagas y sus residuos biológicos sobre las tarjetas electrónicas ha provocado cortocircuitos y daños severos en los componentes, situación que constituye un factor externo excluido de la cobertura de garantía.",
     "Negación - Golpe o rotura de pantalla": "Luego de realizar la revisión física del equipo, se constató la presencia de un impacto directo y fractura en el panel de visualización. Dado que este tipo de daño mecánico responde a factores externos, golpes o manipulación indebida y no a defectos de fabricación, el artículo queda fuera de los términos de cobertura de garantía.",
     "Negación - Problemas eléctricos": "De acuerdo con el diagnóstico técnico efectuado, el daño identificado en los componentes internos fue ocasionado por irregularidades en el suministro eléctrico externo, tales como picos de tensión, conexiones deficientes o falta de sistema de puesta a tierra. En virtud de que la garantía del fabricante aplica únicamente a fallas de manufactura y no contempla daños por factores externos de instalación, la presente solicitud no procede bajo cobertura de garantía."
@@ -95,15 +99,31 @@ def agregar_marca_agua(canvas, doc):
         try:
             canvas.saveState()
             canvas.setFillAlpha(0.12)
-            canvas.drawImage(watermark_file, 0, 0, width=canvas._pagesize[0], height=canvas._pagesize[1], mask='auto', preserveAspectRatio=True, anchor='c')
+            canvas.drawImage(
+                watermark_file,
+                0,
+                0,
+                width=canvas._pagesize[0],
+                height=canvas._pagesize[1],
+                mask='auto',
+                preserveAspectRatio=True,
+                anchor='c'
+            )
             canvas.restoreState()
-        except:
+        except Exception:
             pass
 
 def generar_pdf(datos, secciones_activas, lista_imgs):
     l = LBL
     buffer = BytesIO()
-    doc = SimpleDocTemplate(buffer, pagesize=letter, topMargin=0.4*inch, bottomMargin=0.4*inch, leftMargin=0.5*inch, rightMargin=0.5*inch)
+    doc = SimpleDocTemplate(
+        buffer,
+        pagesize=letter,
+        topMargin=0.4 * inch,
+        bottomMargin=0.4 * inch,
+        leftMargin=0.5 * inch,
+        rightMargin=0.5 * inch
+    )
     color_azul = colors.HexColor("#0056b3")
     
     est_titulo = ParagraphStyle('T', fontSize=16, alignment=1, fontName='Helvetica-Bold', textColor=color_azul)
@@ -115,17 +135,25 @@ def generar_pdf(datos, secciones_activas, lista_imgs):
     story = []
 
     # Cabecera (Logos)
-    logo_izq_path, logo_der_path = "logo.png", "logo_derecho.png"
-    col_izq, col_der = [], []
-    if os.path.exists(logo_izq_path): col_izq.append(RLImage(logo_izq_path, width=1.4*inch, height=0.55*inch))
+    logo_izq_path = "logo.png"
+    logo_der_path = "logo_derecho.png"
+    col_izq = []
+    col_der = []
+
+    if os.path.exists(logo_izq_path):
+        col_izq.append(RLImage(logo_izq_path, width=1.4 * inch, height=0.55 * inch))
+
     if os.path.exists(logo_der_path):
-        img_der = RLImage(logo_der_path, width=1.4*inch, height=0.55*inch)
+        img_der = RLImage(logo_der_path, width=1.4 * inch, height=0.55 * inch)
         img_der.hAlign = 'RIGHT'
         col_der.append(img_der)
 
     if col_izq or col_der:
-        header_table = Table([[col_izq, col_der]], colWidths=[3.7*inch, 3.7*inch])
-        header_table.setStyle(TableStyle([('VALIGN', (0,0), (-1,-1), 'TOP'), ('ALIGN', (1,0), (1,0), 'RIGHT')]))
+        header_table = Table([[col_izq, col_der]], colWidths=[3.7 * inch, 3.7 * inch])
+        header_table.setStyle(TableStyle([
+            ('VALIGN', (0, 0), (-1, -1), 'TOP'),
+            ('ALIGN', (1, 0), (1, 0), 'RIGHT')
+        ]))
         story.append(header_table)
     
     story.append(Spacer(1, 10))
@@ -148,7 +176,7 @@ def generar_pdf(datos, secciones_activas, lista_imgs):
             [Paragraph(f"<b>{l['repuesto']}:</b>", est_txt), Paragraph(f"{datos['repuesto']}", est_txt), Paragraph(f"<b>{l['codigo']}:</b>", est_txt), Paragraph(f"{datos['codigo']}", est_txt)],
             [Paragraph(f"<b>{l['cantidad']}:</b>", est_txt), Paragraph(f"{datos['cantidad']}", est_txt), Paragraph(f"<b>{l['reporte']}:</b>", est_txt), Paragraph(rep_txt, est_txt)]
         ]
-        t = Table(info, colWidths=[1.1*inch, 2.6*inch, 1.1*inch, 2.6*inch])
+        t = Table(info, colWidths=[1.1 * inch, 2.6 * inch, 1.1 * inch, 2.6 * inch])
     else:
         info = [
             [Paragraph(f"<b>{l['orden']}:</b> {datos['orden']}", est_txt), Paragraph(f"<b>{l['fac']}:</b> {fac_txt}", est_txt)],
@@ -156,9 +184,12 @@ def generar_pdf(datos, secciones_activas, lista_imgs):
             [Paragraph(f"<b>{l['prod']}:</b> {datos['producto']}", est_txt), Paragraph(f"<b>{l['serie']}:</b> {datos['serie']}", est_txt)],
             [Paragraph(f"<b>{l['realizador']}:</b> {datos['realizador']}", est_txt), Paragraph(f"<b>{l['fec_rep']}:</b> {datos['fecha_reporte']}", est_txt)]
         ]
-        t = Table(info, colWidths=[3.7*inch, 3.7*inch])
+        t = Table(info, colWidths=[3.7 * inch, 3.7 * inch])
         
-    t.setStyle(TableStyle([('GRID', (0,0), (-1,-1), 0.5, colors.black), ('VALIGN', (0,0), (-1,-1), 'MIDDLE')]))
+    t.setStyle(TableStyle([
+        ('GRID', (0, 0), (-1, -1), 0.5, colors.black),
+        ('VALIGN', (0, 0), (-1, -1), 'MIDDLE')
+    ]))
     story.append(t)
     story.append(Spacer(1, 10))
 
@@ -172,12 +203,13 @@ def generar_pdf(datos, secciones_activas, lista_imgs):
     if lista_imgs:
         story.append(Paragraph(l['evidencia'], est_sec))
         story.append(Spacer(1, 10))
-        datos_cuadricula, fila_actual = [], []
+        datos_cuadricula = []
+        fila_actual = []
         
         for idx, i in enumerate(lista_imgs):
             try:
                 img_stream = BytesIO(i['imagen_raw'])
-                img_obj = RLImage(img_stream, width=3.4*inch, height=2.2*inch)
+                img_obj = RLImage(img_stream, width=3.4 * inch, height=2.2 * inch)
                 celda = [img_obj, Spacer(1, 4), Paragraph(f"{l['figura']} {idx+1}. {i['descripcion']}", est_fig)]
                 fila_actual.append(celda)
                 if len(fila_actual) == 2:
@@ -191,17 +223,20 @@ def generar_pdf(datos, secciones_activas, lista_imgs):
             datos_cuadricula.append(fila_actual)
             
         if datos_cuadricula:
-            t_grid = Table(datos_cuadricula, colWidths=[3.7*inch, 3.7*inch])
+            t_grid = Table(datos_cuadricula, colWidths=[3.7 * inch, 3.7 * inch])
             t_grid.setStyle(TableStyle([
-                ('GRID', (0,0), (-1,-1), 1, colors.black),
-                ('VALIGN', (0,0), (-1,-1), 'MIDDLE'), ('ALIGN', (0,0), (-1,-1), 'CENTER'),
-                ('PADDING', (0,0), (-1,-1), 6)
+                ('GRID', (0, 0), (-1, -1), 1, colors.black),
+                ('VALIGN', (0, 0), (-1, -1), 'MIDDLE'),
+                ('ALIGN', (0, 0), (-1, -1), 'CENTER'),
+                ('PADDING', (0, 0), (-1, -1), 6)
             ]))
             story.append(t_grid)
 
     story.append(Spacer(1, 60))
-    t_firmas = Table([[Paragraph(f"{l['realizador']}:", est_firma), Paragraph(f"{l['revisador']}:", est_firma)], 
-                      [Paragraph(datos['realizador'], est_firma), Paragraph(datos['tecnico'], est_firma)]], colWidths=[3.7*inch, 3.7*inch])
+    t_firmas = Table([
+        [Paragraph(f"{l['realizador']}:", est_firma), Paragraph(f"{l['revisador']}:", est_firma)], 
+        [Paragraph(datos['realizador'], est_firma), Paragraph(datos['tecnico'], est_firma)]
+    ], colWidths=[3.7 * inch, 3.7 * inch])
     story.append(t_firmas)
     
     doc.build(story, onFirstPage=agregar_marca_agua, onLaterPages=agregar_marca_agua)
@@ -213,7 +248,7 @@ def generar_txt_contenido(datos, secciones_activas):
     titulo_txt = obtener_titulos_por_tipo(datos['tipo_reporte_original'])
     fac_txt = "STOCK" if str(datos['factura']).strip() in ["0", "nan", ""] else datos['factura']
     
-    txt = f"{titulo_txt}\n" + "="*30 + "\n\n"
+    txt = f"{titulo_txt}\n" + "=" * 30 + "\n\n"
     txt += f"{l['cliente']}: {datos['cliente']}\n"
     txt += f"{l['fac']}: {fac_txt}\n"
     txt += f"{l['fec_fac']}: {datos['fecha_factura']}\n"
@@ -242,15 +277,24 @@ def generar_txt_contenido(datos, secciones_activas):
 st.title("🚀 Reportes Técnicos")
 
 orden_id = st.text_input("Ingrese número de Orden")
-c_v, s_v, p_v, f_v, ff_v = "", "", "", "", date.today()
+c_v = ""
+s_v = ""
+p_v = ""
+f_v = ""
+ff_v = date.today()
 
 if orden_id:
     res = df_db[df_db['Orden'] == orden_id]
     if not res.empty:
         row = res.iloc[0]
-        c_v, s_v, p_v, f_v = str(row.get('Cliente','')), str(row.get('Serie','')), str(row.get('Producto','')), str(row.get('Fac_Min',''))
-        try: ff_v = pd.to_datetime(str(row.get('Fec_Fac_Min',''))).date()
-        except: ff_v = date.today()
+        c_v = str(row.get('Cliente', ''))
+        s_v = str(row.get('Serie', ''))
+        p_v = str(row.get('Producto', ''))
+        f_v = str(row.get('Fac_Min', ''))
+        try:
+            ff_v = pd.to_datetime(str(row.get('Fec_Fac_Min', ''))).date()
+        except Exception:
+            ff_v = date.today()
 
 st.markdown("### Datos del Reporte")
 col1, col2 = st.columns(2)
@@ -266,8 +310,12 @@ with col2:
     f_fec_rep = st.date_input("Fecha del Reporte", value=date.today())
     f_serie = st.text_input("Serie", value=s_v)
 
-# --- CAMPOS DINAMICOS PARA RECLAMO AL PROVEEDOR ---
-f_marca, f_modelo, f_repuesto, f_codigo, f_cantidad = "", "", "", "", 1
+# --- CAMPOS DINÁMICOS PARA RECLAMO AL PROVEEDOR ---
+f_marca = ""
+f_modelo = ""
+f_repuesto = ""
+f_codigo = ""
+f_cantidad = 1
 
 if tipo_rep == "RECLAMO AL PROVEEDOR":
     st.markdown("### 📝 Datos de Reclamo al Proveedor")
@@ -283,37 +331,51 @@ st.markdown("---")
 
 st.markdown("### 📝 Contenido del Reporte (Selecciona qué incluir)")
 def_rf = f"Ingresa a servicio técnico {f_prod}. Se observa el uso continuo del artículo."
-def_re = "Se procede a revisar el sistema de alimentación de energía y sus líneas de conexión.\nSe procede a revisar el sistema electrónico del equipo.\nSe procede a revisar el sistema mecanico de equipo"
+def_re = "Se procede a revisar el sistema de alimentación de energía y sus líneas de conexión.\nSe procede a revisar el sistema electrónico del equipo.\nSe procede a revisar el sistema mecanico de equipo."
 texto_concl_default = TEXTOS_CONCLUSIONES.get(tipo_rep, "")
 
 c_chk1, c_txt1 = st.columns([1, 10])
-with c_chk1: inc_rf = st.checkbox("Incluir", value=True, key="c1")
-with c_txt1: f_rev_fisica = st.text_area("Revisión Física", value=def_rf)
+with c_chk1:
+    inc_rf = st.checkbox("Incluir", value=True, key="c1")
+with c_txt1:
+    f_rev_fisica = st.text_area("Revisión Física", value=def_rf)
 
 c_chk2, c_txt2 = st.columns([1, 10])
-with c_chk2: inc_ing = st.checkbox("Incluir", value=True, key="c2")
-with c_txt2: f_ingreso_tec = st.text_area("Ingresa a servicio técnico", value="Revisión inicial del equipo.")
+with c_chk2:
+    inc_ing = st.checkbox("Incluir", value=True, key="c2")
+with c_txt2:
+    f_ingreso_tec = st.text_area("Ingresa a servicio técnico", value="Revisión inicial del equipo.")
 
 c_chk3, c_txt3 = st.columns([1, 10])
-with c_chk3: inc_re = st.checkbox("Incluir", value=True, key="c3")
-with c_txt3: f_rev_electro = st.text_area("Revisión electro-electrónica-mecanica", value=def_re)
+with c_chk3:
+    inc_re = st.checkbox("Incluir", value=True, key="c3")
+with c_txt3:
+    f_rev_electro = st.text_area("Revisión electro-electrónica-mecanica", value=def_re)
 
 # Sección de Observaciones con Plantillas de Negación de Garantía
 c_chk4, c_txt4 = st.columns([1, 10])
-with c_chk4: inc_obs = st.checkbox("Incluir", value=True, key="c4")
-with c_txt4: 
-    st.selectbox("Plantillas de Observación (Opcional)", options=list(PLANTILLAS_OBSERVACIONES.keys()), key="sel_plantilla_obs", on_change=actualizar_observacion)
+with c_chk4:
+    inc_obs = st.checkbox("Incluir", value=True, key="c4")
+with c_txt4:
+    st.selectbox(
+        "Plantillas de Observación (Opcional)",
+        options=list(PLANTILLAS_OBSERVACIONES.keys()),
+        key="sel_plantilla_obs",
+        on_change=actualizar_observacion
+    )
     f_obs = st.text_area("Observaciones", value=st.session_state.obs_text, height=120)
 
 c_chk5, c_txt5 = st.columns([1, 10])
-with c_chk5: inc_con = st.checkbox("Incluir", value=True, key="c5")
-with c_txt5: f_concl = st.text_area("Conclusiones", value=texto_concl_default, height=100)
+with c_chk5:
+    inc_con = st.checkbox("Incluir", value=True, key="c5")
+with c_txt5:
+    f_concl = st.text_area("Conclusiones", value=texto_concl_default, height=100)
 
 st.markdown("---")
 st.markdown("### 📸 Evidencia Fotográfica")
-uploaded_files = st.file_uploader("Subir imágenes", type=['jpg','png','jpeg'], accept_multiple_files=True)
+uploaded_files = st.file_uploader("Subir imágenes", type=['jpg', 'png', 'jpeg'], accept_multiple_files=True)
 
-lista_imgs_temp = [] 
+lista_imgs_temp = []
 if uploaded_files:
     for idx, file in enumerate(uploaded_files):
         c_img, c_desc = st.columns([1, 3])
@@ -327,15 +389,15 @@ st.markdown("---")
 
 if st.button("💾 GENERAR ARCHIVOS (PDF Y TXT)", use_container_width=True):
     with st.spinner("Generando documentos..."):
-        
         imgs_procesadas_es = []
         for item in lista_imgs_temp:
             try:
                 p_img = PilImage.open(item['file'])
-                if p_img.mode != 'RGB': p_img = p_img.convert('RGB')
+                if p_img.mode != 'RGB':
+                    p_img = p_img.convert('RGB')
                 img_byte = BytesIO()
                 p_img.save(img_byte, format='JPEG', quality=95)
-                img_raw = img_byte.getvalue() 
+                img_raw = img_byte.getvalue()
                 
                 desc_es = item['desc']
                 imgs_procesadas_es.append({"imagen_raw": img_raw, "descripcion": desc_es})
@@ -344,19 +406,42 @@ if st.button("💾 GENERAR ARCHIVOS (PDF Y TXT)", use_container_width=True):
 
         # --- DATOS EN ESPAÑOL ---
         secciones_es = []
-        titulos_es = ["Revisión Física", "Ingresa a servicio técnico", "Revisión electro-electrónica-mecanica", "Observaciones", "Conclusiones"]
+        titulos_es = [
+            "Revisión Física",
+            "Ingresa a servicio técnico",
+            "Revisión electro-electrónica-mecanica",
+            "Observaciones",
+            "Conclusiones"
+        ]
         
-        if inc_rf: secciones_es.append((titulos_es[0], f_rev_fisica))
-        if inc_ing: secciones_es.append((titulos_es[1], f_ingreso_tec))
-        if inc_re: secciones_es.append((titulos_es[2], f_rev_electro))
-        if inc_obs: secciones_es.append((titulos_es[3], f_obs))
-        if inc_con: secciones_es.append((titulos_es[4], f_concl))
+        if inc_rf:
+            secciones_es.append((titulos_es[0], f_rev_fisica))
+        if inc_ing:
+            secciones_es.append((titulos_es[1], f_ingreso_tec))
+        if inc_re:
+            secciones_es.append((titulos_es[2], f_rev_electro))
+        if inc_obs:
+            secciones_es.append((titulos_es[3], f_obs))
+        if inc_con:
+            secciones_es.append((titulos_es[4], f_concl))
 
         datos_es = {
-            "orden": orden_id, "cliente": f_cliente, "factura": f_fac, "fecha_factura": f_fec_fac,
-            "producto": f_prod, "serie": f_serie, "tecnico": f_tecnico, "realizador": f_realizador,
-            "fecha_reporte": f_fec_rep, "tipo_reporte": tipo_rep, "tipo_reporte_original": tipo_rep,
-            "marca": f_marca, "modelo": f_modelo, "repuesto": f_repuesto, "codigo": f_codigo, "cantidad": f_cantidad
+            "orden": orden_id,
+            "cliente": f_cliente,
+            "factura": f_fac,
+            "fecha_factura": f_fec_fac,
+            "producto": f_prod,
+            "serie": f_serie,
+            "tecnico": f_tecnico,
+            "realizador": f_realizador,
+            "fecha_reporte": f_fec_rep,
+            "tipo_reporte": tipo_rep,
+            "tipo_reporte_original": tipo_rep,
+            "marca": f_marca,
+            "modelo": f_modelo,
+            "repuesto": f_repuesto,
+            "codigo": f_codigo,
+            "cantidad": f_cantidad
         }
 
         st.session_state.pdf_es = generar_pdf(datos_es, secciones_es, imgs_procesadas_es)
@@ -368,6 +453,18 @@ if st.session_state.pdf_es:
     st.markdown("### 📥 Descargar Documentos")
     c1, c2 = st.columns(2)
     with c1:
-        st.download_button("📄 Descargar PDF", data=st.session_state.pdf_es, file_name=f"{f_prod}_{f_cliente}_{orden_id}.pdf", mime="application/pdf", use_container_width=True)
+        st.download_button(
+            "📄 Descargar PDF",
+            data=st.session_state.pdf_es,
+            file_name=f"{f_prod}_{f_cliente}_{orden_id}.pdf",
+            mime="application/pdf",
+            use_container_width=True
+        )
     with c2:
-        st.download_button("🔤 Descargar TXT", data=st.session_state.txt_es, file_name=f"Status_{orden_id}.txt", mime="text/plain", use_container_width=True)
+        st.download_button(
+            "🔤 Descargar TXT",
+            data=st.session_state.txt_es,
+            file_name=f"Status_{orden_id}.txt",
+            mime="text/plain",
+            use_container_width=True
+        )
