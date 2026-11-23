@@ -183,3 +183,289 @@ def generar_pdf(datos, secciones_activas, lista_imgs):
             [Paragraph(f"<b>{l['orden']}:</b> {datos['orden']}", est_txt), Paragraph(f"<b>{l['fac']}:</b> {fac_txt}", est_txt)],
             [Paragraph(f"<b>{l['cliente']}:</b> {datos['cliente']}", est_txt), Paragraph(f"<b>{l['fec_fac']}:</b> {datos['fecha_factura']}", est_txt)],
             [Paragraph(f"<b>{l['prod']}:</b> {datos['producto']}", est_txt), Paragraph(f"<b>{l['serie']}:</b> {datos['serie']}", est_txt)],
+            [Paragraph(f"<b>{l['realizador']}:</b> {datos['realizador']}", est_txt), Paragraph(f"<b>{l['fec_rep']}:</b> {datos['fecha_reporte']}", est_txt)]
+        ]
+        t = Table(info, colWidths=[3.7 * inch, 3.7 * inch])
+        
+    t.setStyle(TableStyle([
+        ('GRID', (0, 0), (-1, -1), 0.5, colors.black),
+        ('VALIGN', (0, 0), (-1, -1), 'MIDDLE')
+    ]))
+    story.append(t)
+    story.append(Spacer(1, 10))
+
+    # Secciones Dinámicas
+    for tit, cont in secciones_activas:
+        story.append(Paragraph(tit, est_sec))
+        story.append(Paragraph(cont.replace('\n', '<br/>'), est_txt))
+        story.append(Spacer(1, 5))
+
+    # Imágenes
+    if lista_imgs:
+        story.append(Paragraph(l['evidencia'], est_sec))
+        story.append(Spacer(1, 10))
+        datos_cuadricula = []
+        fila_actual = []
+        
+        for idx, i in enumerate(lista_imgs):
+            try:
+                img_stream = BytesIO(i['imagen_raw'])
+                img_obj = RLImage(img_stream, width=3.4 * inch, height=2.2 * inch)
+                celda = [img_obj, Spacer(1, 4), Paragraph(f"{l['figura']} {idx+1}. {i['descripcion']}", est_fig)]
+                fila_actual.append(celda)
+                if len(fila_actual) == 2:
+                    datos_cuadricula.append(fila_actual)
+                    fila_actual = []
+            except Exception:
+                fila_actual.append([Paragraph(f"Error imagen {idx+1}", est_txt)])
+                
+        if fila_actual:
+            fila_actual.append("")
+            datos_cuadricula.append(fila_actual)
+            
+        if datos_cuadricula:
+            t_grid = Table(datos_cuadricula, colWidths=[3.7 * inch, 3.7 * inch])
+            t_grid.setStyle(TableStyle([
+                ('GRID', (0, 0), (-1, -1), 1, colors.black),
+                ('VALIGN', (0, 0), (-1, -1), 'MIDDLE'),
+                ('ALIGN', (0, 0), (-1, -1), 'CENTER'),
+                ('PADDING', (0, 0), (-1, -1), 6)
+            ]))
+            story.append(t_grid)
+
+    story.append(Spacer(1, 60))
+    t_firmas = Table([
+        [Paragraph(f"{l['realizador']}:", est_firma), Paragraph(f"{l['revisador']}:", est_firma)], 
+        [Paragraph(datos['realizador'], est_firma), Paragraph(datos['tecnico'], est_firma)]
+    ], colWidths=[3.7 * inch, 3.7 * inch])
+    story.append(t_firmas)
+    
+    doc.build(story, onFirstPage=agregar_marca_agua, onLaterPages=agregar_marca_agua)
+    buffer.seek(0)
+    return buffer.read()
+
+def generar_txt_contenido(datos, secciones_activas):
+    l = LBL
+    titulo_txt = obtener_titulos_por_tipo(datos['tipo_reporte_original'])
+    fac_txt = "STOCK" if str(datos['factura']).strip() in ["0", "nan", ""] else datos['factura']
+    
+    txt = f"{titulo_txt}\n" + "=" * 30 + "\n\n"
+    txt += f"{l['cliente']}: {datos['cliente']}\n"
+    txt += f"{l['fac']}: {fac_txt}\n"
+    txt += f"{l['fec_fac']}: {datos['fecha_factura']}\n"
+    txt += f"{l['orden']}: {datos['orden']}\n"
+    txt += f"{l['prod']}: {datos['producto']}\n"
+    
+    if "RECLAMO AL PROVEEDOR" in str(datos['tipo_reporte_original']).upper():
+        txt += f"{l['marca']}: {datos['marca']}\n"
+        txt += f"{l['modelo']}: {datos['modelo']}\n"
+        txt += f"{l['repuesto']}: {datos['repuesto']}\n"
+        txt += f"{l['codigo']}: {datos['codigo']}\n"
+        txt += f"{l['cantidad']}: {datos['cantidad']}\n"
+    else:
+        txt += f"{l['serie']}: {datos['serie']}\n"
+
+    txt += f"{l['revisador']}: {datos['tecnico']}\n\n"
+    txt += f"TIPO DE REPORTE: {datos['tipo_reporte']}\n\n"
+    
+    for tit, cont in secciones_activas:
+        txt += f"--- {tit} ---\n{cont}\n\n"
+
+    txt += f"Atentamente,\n{datos['realizador']}\nCoordinador Postventa"
+    return txt
+
+# --- 4. INTERFAZ ---
+st.title("🚀 Reportes Técnicos")
+
+orden_id = st.text_input("Ingrese número de Orden")
+c_v = ""
+s_v = ""
+p_v = ""
+f_v = ""
+ff_v = date.today()
+
+if orden_id.strip():
+    res = df_db[df_db['Orden'].astype(str).str.strip() == orden_id.strip()]
+    if not res.empty:
+        row = res.iloc[0]
+        c_v = str(row.get('Cliente', ''))
+        s_v = str(row.get('Serie', ''))
+        p_v = str(row.get('Producto', ''))
+        f_v = str(row.get('Fac_Min', ''))
+        try:
+            ff_v = pd.to_datetime(str(row.get('Fec_Fac_Min', ''))).date()
+        except Exception:
+            ff_v = date.today()
+
+st.markdown("### Datos del Reporte")
+col1, col2 = st.columns(2)
+with col1:
+    tipo_rep = st.selectbox("Tipo de Reporte", options=OPCIONES_REPORTE)
+    f_realizador = st.selectbox("Realizado por", options=LISTA_REALIZADORES)
+    f_cliente = st.text_input("Cliente", value=c_v)
+    f_prod = st.text_input("Artículo / Producto", value=p_v)
+with col2:
+    f_tecnico = st.selectbox("Revisado por (Técnico)", options=LISTA_TECNICOS)
+    f_fac = st.text_input("Factura", value=f_v)
+    f_fec_fac = st.date_input("Fecha Factura", value=ff_v)
+    f_fec_rep = st.date_input("Fecha del Reporte", value=date.today())
+    f_serie = st.text_input("Serie", value=s_v)
+
+# --- CAMPOS DINÁMICOS PARA RECLAMO AL PROVEEDOR ---
+f_marca = ""
+f_modelo = ""
+f_repuesto = ""
+f_codigo = ""
+f_cantidad = 1
+
+if tipo_rep == "RECLAMO AL PROVEEDOR":
+    st.markdown("### 📝 Datos de Reclamo al Proveedor")
+    col_r1, col_r2 = st.columns(2)
+    with col_r1:
+        f_marca = st.text_input("Marca")
+        f_modelo = st.text_input("Modelo")
+        f_repuesto = st.text_input("Repuesto (Ej. CONGELADOR HORIZONTAL)")
+    with col_r2:
+        f_codigo = st.text_input("Código")
+        f_cantidad = st.number_input("Cantidad", min_value=1, value=1)
+st.markdown("---")
+
+st.markdown("### 📝 Contenido del Reporte (Selecciona qué incluir)")
+def_rf = f"Ingresa a servicio técnico {f_prod}. Se observa el uso continuo del artículo."
+def_re = "Se procede a revisar el sistema de alimentación de energía y sus líneas de conexión.\nSe procede a revisar el sistema electrónico del equipo.\nSe procede a revisar el sistema mecanico de equipo."
+texto_concl_default = TEXTOS_CONCLUSIONES.get(tipo_rep, "")
+
+c_chk1, c_txt1 = st.columns([1, 10])
+with c_chk1:
+    inc_rf = st.checkbox("Incluir", value=True, key="c1")
+with c_txt1:
+    f_rev_fisica = st.text_area("Revisión Física", value=def_rf)
+
+c_chk2, c_txt2 = st.columns([1, 10])
+with c_chk2:
+    inc_ing = st.checkbox("Incluir", value=True, key="c2")
+with c_txt2:
+    f_ingreso_tec = st.text_area("Ingresa a servicio técnico", value="Revisión inicial del equipo.")
+
+c_chk3, c_txt3 = st.columns([1, 10])
+with c_chk3:
+    inc_re = st.checkbox("Incluir", value=True, key="c3")
+with c_txt3:
+    f_rev_electro = st.text_area("Revisión electro-electrónica-mecanica", value=def_re)
+
+# Sección de Observaciones con Plantillas de Negación de Garantía
+c_chk4, c_txt4 = st.columns([1, 10])
+with c_chk4:
+    inc_obs = st.checkbox("Incluir", value=True, key="c4")
+with c_txt4:
+    st.selectbox(
+        "Plantillas de Observación (Opcional)",
+        options=list(PLANTILLAS_OBSERVACIONES.keys()),
+        key="sel_plantilla_obs",
+        on_change=actualizar_observacion
+    )
+    f_obs = st.text_area("Observaciones", value=st.session_state.obs_text, height=120)
+
+c_chk5, c_txt5 = st.columns([1, 10])
+with c_chk5:
+    inc_con = st.checkbox("Incluir", value=True, key="c5")
+with c_txt5:
+    f_concl = st.text_area("Conclusiones", value=texto_concl_default, height=100)
+
+st.markdown("---")
+st.markdown("### 📸 Evidencia Fotográfica")
+uploaded_files = st.file_uploader("Subir imágenes", type=['jpg', 'png', 'jpeg'], accept_multiple_files=True)
+
+lista_imgs_temp = []
+if uploaded_files:
+    for idx, file in enumerate(uploaded_files):
+        c_img, c_desc = st.columns([1, 3])
+        with c_img:
+            st.image(file, use_container_width=True)
+        with c_desc:
+            desc = st.text_input(f"Descripción Imagen #{idx+1}", value="Evidencia técnica.", key=f"desc_{idx}")
+            lista_imgs_temp.append({"file": file, "desc": desc})
+
+st.markdown("---")
+
+if st.button("💾 GENERAR ARCHIVOS (PDF Y TXT)", use_container_width=True):
+    with st.spinner("Generando documentos..."):
+        imgs_procesadas_es = []
+        for item in lista_imgs_temp:
+            try:
+                p_img = PilImage.open(item['file'])
+                if p_img.mode != 'RGB':
+                    p_img = p_img.convert('RGB')
+                img_byte = BytesIO()
+                p_img.save(img_byte, format='JPEG', quality=95)
+                img_raw = img_byte.getvalue()
+                
+                desc_es = item['desc']
+                imgs_procesadas_es.append({"imagen_raw": img_raw, "descripcion": desc_es})
+            except Exception as e:
+                st.error(f"Error procesando imagen: {e}")
+
+        # --- DATOS EN ESPAÑOL ---
+        secciones_es = []
+        titulos_es = [
+            "Revisión Física",
+            "Ingresa a servicio técnico",
+            "Revisión electro-electrónica-mecanica",
+            "Observaciones",
+            "Conclusiones"
+        ]
+        
+        if inc_rf:
+            secciones_es.append((titulos_es[0], f_rev_fisica))
+        if inc_ing:
+            secciones_es.append((titulos_es[1], f_ingreso_tec))
+        if inc_re:
+            secciones_es.append((titulos_es[2], f_rev_electro))
+        if inc_obs:
+            secciones_es.append((titulos_es[3], f_obs))
+        if inc_con:
+            secciones_es.append((titulos_es[4], f_concl))
+
+        datos_es = {
+            "orden": orden_id.strip(),
+            "cliente": f_cliente,
+            "factura": f_fac,
+            "fecha_factura": f_fec_fac,
+            "producto": f_prod,
+            "serie": f_serie,
+            "tecnico": f_tecnico,
+            "realizador": f_realizador,
+            "fecha_reporte": f_fec_rep,
+            "tipo_reporte": tipo_rep,
+            "tipo_reporte_original": tipo_rep,
+            "marca": f_marca,
+            "modelo": f_modelo,
+            "repuesto": f_repuesto,
+            "codigo": f_codigo,
+            "cantidad": f_cantidad
+        }
+
+        st.session_state.pdf_es = generar_pdf(datos_es, secciones_es, imgs_procesadas_es)
+        st.session_state.txt_es = generar_txt_contenido(datos_es, secciones_es)
+        
+        st.success("✅ ¡Los archivos PDF y TXT fueron generados exitosamente!")
+
+if st.session_state.pdf_es:
+    st.markdown("### 📥 Descargar Documentos")
+    c1, c2 = st.columns(2)
+    with c1:
+        st.download_button(
+            "📄 Descargar PDF",
+            data=st.session_state.pdf_es,
+            file_name=f"{f_prod}_{f_cliente}_{orden_id.strip()}.pdf",
+            mime="application/pdf",
+            use_container_width=True
+        )
+    with c2:
+        st.download_button(
+            "🔤 Descargar TXT",
+            data=st.session_state.txt_es,
+            file_name=f"Status_{orden_id.strip()}.txt",
+            mime="text/plain",
+            use_container_width=True
+        )
